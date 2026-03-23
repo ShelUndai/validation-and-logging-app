@@ -30,8 +30,6 @@ import { Label } from "@/components/ui/label"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Eye } from "lucide-react"
 
 interface ValidationResult {
   item: string
@@ -610,11 +608,6 @@ export default function ChangeLookupPage() {
   const [historyLogs, setHistoryLogs] = useState<ValidationLog[]>(mockAllHistory)
   const [historyExpandedRows, setHistoryExpandedRows] = useState<Set<string>>(new Set())
   const [historyLoading, setHistoryLoading] = useState(false)
-  
-  // Detail view state
-  const [selectedLogDetail, setSelectedLogDetail] = useState<ChangeValidation | null>(null)
-  const [detailDialogOpen, setDetailDialogOpen] = useState(false)
-  const [detailLoading, setDetailLoading] = useState(false)
 
   const handleValidation = async () => {
     if (!changeNumber.trim()) {
@@ -645,35 +638,6 @@ export default function ChangeLookupPage() {
     if (e.key === "Enter") {
       handleValidation()
     }
-  }
-
-  // View validation detail
-  const viewValidationDetail = async (log: ValidationLog) => {
-    setDetailLoading(true)
-    setDetailDialogOpen(true)
-    
-    // Simulate fetching the full validation result
-    await new Promise((resolve) => setTimeout(resolve, 500))
-    
-    // Generate mock full validation based on the log
-    const isPass = log.result === "pass"
-    const result = await validateChangeRecord(isPass ? "CHG0000001" : log.change_number)
-    
-    if (result) {
-      // Override with the log's specific data
-      result.change_number = log.change_number
-      result.executed_by = log.executed_by
-      result.executed_on = new Date(log.executed_at).toLocaleDateString()
-      result.execution_time = log.duration
-      result.overall_score = log.overall_score
-      result.validation_status = log.result
-      result.summary.passed = log.passed_checks
-      result.summary.failed = log.failed_checks
-      result.summary.total_checks = log.total_checks
-    }
-    
-    setSelectedLogDetail(result)
-    setDetailLoading(false)
   }
 
   // History functions
@@ -1241,19 +1205,7 @@ export default function ChangeLookupPage() {
                                   </Button>
                                 </TableCell>
                               )}
-                              <TableCell className="font-mono text-sm">
-                                <Button
-                                  variant="link"
-                                  size="sm"
-                                  className="h-auto p-0 text-primary font-mono"
-                                  onClick={(e) => {
-                                    e.stopPropagation()
-                                    viewValidationDetail(log)
-                                  }}
-                                >
-                                  {log.id}
-                                </Button>
-                              </TableCell>
+                              <TableCell className="font-mono text-sm">{log.id}</TableCell>
                               <TableCell>
                                 <div className="flex items-center gap-1">
                                   <User className="h-3 w-3 text-muted-foreground" />
@@ -1290,23 +1242,11 @@ export default function ChangeLookupPage() {
                                       <span className="text-muted-foreground">Total Checks:</span>
                                       <span className="ml-2 font-medium">{log.total_checks}</span>
                                     </div>
-                                    <div className="flex flex-col gap-1">
+                                    <div>
                                       <Button
                                         variant="link"
                                         size="sm"
-                                        className="h-auto p-0 text-primary justify-start"
-                                        onClick={(e) => {
-                                          e.stopPropagation()
-                                          viewValidationDetail(log)
-                                        }}
-                                      >
-                                        <Eye className="h-3 w-3 mr-1" />
-                                        View Full Results
-                                      </Button>
-                                      <Button
-                                        variant="link"
-                                        size="sm"
-                                        className="h-auto p-0 text-primary justify-start"
+                                        className="h-auto p-0 text-primary"
                                         onClick={(e) => {
                                           e.stopPropagation()
                                           setChangeNumber(log.change_number)
@@ -1336,131 +1276,6 @@ export default function ChangeLookupPage() {
           </TabsContent>
         </Tabs>
       </main>
-
-      {/* Validation Detail Dialog */}
-      <Dialog open={detailDialogOpen} onOpenChange={setDetailDialogOpen}>
-        <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Validation Results</DialogTitle>
-            <DialogDescription>
-              {selectedLogDetail && extractShowingResultsLine(selectedLogDetail.script_output)}
-            </DialogDescription>
-          </DialogHeader>
-          
-          {detailLoading ? (
-            <div className="flex items-center justify-center py-12">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-            </div>
-          ) : selectedLogDetail ? (
-            <div className="space-y-4">
-              {/* Summary Header */}
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-4">
-                  <div>
-                    <div className="text-sm font-medium">Overall Score</div>
-                    <div className="flex items-center gap-2">
-                      <Progress value={selectedLogDetail.overall_score} className="w-16 h-1.5" />
-                      <span className="text-sm font-bold min-w-[3rem]">{selectedLogDetail.overall_score}%</span>
-                    </div>
-                  </div>
-                  <Badge
-                    className={`text-xs px-2 py-0.5 ${
-                      selectedLogDetail.overall_score === 100
-                        ? "bg-green-100 text-green-800 hover:bg-green-100"
-                        : selectedLogDetail.overall_score >= 70
-                          ? "bg-yellow-100 text-yellow-800 hover:bg-yellow-100"
-                          : "bg-red-100 text-red-800 hover:bg-red-100"
-                    }`}
-                  >
-                    {selectedLogDetail.overall_score === 100 ? (
-                      <><CheckCircle className="w-2.5 h-2.5 mr-1" />Ready</>
-                    ) : selectedLogDetail.overall_score >= 70 ? (
-                      <><AlertTriangle className="w-2.5 h-2.5 mr-1" />Caution</>
-                    ) : (
-                      <><XCircle className="w-2.5 h-2.5 mr-1" />Not Ready</>
-                    )}
-                  </Badge>
-                  <span className="text-xs text-muted-foreground">
-                    {selectedLogDetail.summary.passed}/{selectedLogDetail.summary.total_checks} passed
-                  </span>
-                </div>
-                <div className="text-sm text-muted-foreground">
-                  <span>Executed by {selectedLogDetail.executed_by}</span>
-                  <span className="mx-2">|</span>
-                  <span>{selectedLogDetail.executed_on}</span>
-                </div>
-              </div>
-
-              {/* Validation Output */}
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-base">Validation Output</CardTitle>
-                  <CardDescription>Automation script execution results</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="bg-zinc-900 text-zinc-100 p-4 rounded-lg font-mono text-xs overflow-auto max-h-[400px]">
-                    {selectedLogDetail.script_output.split("\n").map((line, index) => {
-                      let colorClass = "text-zinc-300"
-                      if (line.startsWith("ERROR:") || line.includes("Satisfied: False")) {
-                        colorClass = "text-red-400"
-                      } else if (line.startsWith("WARNING:")) {
-                        colorClass = "text-yellow-400"
-                      } else if (line.startsWith("INFO:") || line.includes("Satisfied: True")) {
-                        colorClass = "text-blue-400"
-                      } else if (line.includes("Passed:") || line.includes("Failed:")) {
-                        colorClass = "text-white font-bold"
-                      }
-
-                      return (
-                        <div key={index} className="flex">
-                          <span className="text-zinc-500 select-none w-8 text-right mr-4">{index + 1}</span>
-                          <span className={colorClass}>{line}</span>
-                        </div>
-                      )
-                    })}
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Action Steps if failed */}
-              {selectedLogDetail.failed_requirements.length > 0 && (
-                <Card>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-base">Action Steps</CardTitle>
-                    <CardDescription>Items that need attention before approval</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-2">
-                      {selectedLogDetail.failed_requirements.map((requirement, index) => (
-                        <div key={index} className="flex items-start gap-3">
-                          <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-800 text-xs font-medium">
-                            {index + 1}
-                          </div>
-                          <div className="flex-1 bg-muted/50 rounded-md p-2">
-                            <span className="text-sm">{requirement}</span>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
-
-              {/* Ready for approval message */}
-              {selectedLogDetail.overall_score === 100 && (
-                <Card className="border-green-200 bg-green-50">
-                  <CardContent className="py-4">
-                    <div className="flex items-center justify-center gap-2 text-green-800">
-                      <CheckCircle className="h-5 w-5" />
-                      <span className="font-medium">Ready for Approval</span>
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
-            </div>
-          ) : null}
-        </DialogContent>
-      </Dialog>
     </div>
   )
 }
