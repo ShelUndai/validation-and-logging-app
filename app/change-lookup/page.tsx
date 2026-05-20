@@ -1131,16 +1131,10 @@ export default function ChangeLookupPage() {
                       <h4 className="font-medium mb-1">Searching:</h4>
                       <ul className="list-disc list-inside space-y-1 ml-2">
                         <li>Enter a change number in the search box and click "Search" to filter results</li>
-                        <li>Click "Clear" to return to viewing all recent logs</li>
-                        <li>Use "Export CSV" to download the current view for reporting</li>
-                      </ul>
-                    </div>
-                    <div>
-                      <h4 className="font-medium mb-1">Filtering:</h4>
-                      <ul className="list-disc list-inside space-y-1 ml-2">
-                        <li>Use the <span className="text-primary font-medium">Line of Business</span> dropdown above the table to filter by department</li>
-                        <li>Combine search and LOB filter to narrow down results</li>
-                        <li>Click the X button next to the filter to clear just the LOB filter</li>
+                        <li>Use the <span className="text-primary font-medium">Line of Business</span> dropdown to filter by department or business unit</li>
+                        <li>Combine both filters to narrow down results further</li>
+                        <li>Click "Clear All" to reset all filters and return to viewing all logs</li>
+                        <li>Use "Export CSV" to download the current filtered view for reporting</li>
                       </ul>
                     </div>
                     <div>
@@ -1174,10 +1168,10 @@ export default function ChangeLookupPage() {
               <CardHeader className="pb-3">
                 <CardTitle className="text-base">Search Validation History</CardTitle>
                 <CardDescription>
-                  Search for validation history by change number, or browse all recent validation attempts
+                  Search for validation history by change number, filter by line of business, or browse all recent validation attempts
                 </CardDescription>
               </CardHeader>
-              <CardContent>
+              <CardContent className="space-y-3">
                 <div className="flex gap-2">
                   <div className="relative flex-1">
                     <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -1192,16 +1186,17 @@ export default function ChangeLookupPage() {
                   <Button onClick={handleHistorySearch} disabled={historyLoading}>
                     {historyLoading ? "Searching..." : "Search"}
                   </Button>
-                  {historySubmittedQuery && (
+                  {(historySubmittedQuery || historyLobFilter !== "All") && (
                     <Button 
                       variant="outline" 
                       onClick={() => {
                         setHistorySearchQuery("")
                         setHistorySubmittedQuery("")
-                        fetchHistory("", historyLobFilter)
+                        setHistoryLobFilter("All")
+                        setHistoryLogs(mockAllHistory)
                       }}
                     >
-                      Clear
+                      Clear All
                     </Button>
                   )}
                 </div>
@@ -1220,12 +1215,12 @@ export default function ChangeLookupPage() {
                       {historyLogs.length} validation attempt{historyLogs.length !== 1 ? "s" : ""} found
                     </CardDescription>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-3">
                     <div className="flex items-center gap-2">
-                      <Filter className="h-4 w-4 text-muted-foreground" />
+                      <Label htmlFor="lob-filter" className="text-sm text-muted-foreground whitespace-nowrap">Line of Business:</Label>
                       <Select value={historyLobFilter} onValueChange={handleLobFilterChange}>
-                        <SelectTrigger className="w-[180px]">
-                          <SelectValue placeholder="Line of Business" />
+                        <SelectTrigger id="lob-filter" className="w-[180px]">
+                          <SelectValue placeholder="All" />
                         </SelectTrigger>
                         <SelectContent>
                           {LINES_OF_BUSINESS.map((lob) => (
@@ -1243,6 +1238,7 @@ export default function ChangeLookupPage() {
                             setHistoryLobFilter("All")
                             fetchHistory(historySubmittedQuery, "All")
                           }}
+                          className="h-8 w-8 p-0"
                         >
                           <X className="h-4 w-4" />
                         </Button>
