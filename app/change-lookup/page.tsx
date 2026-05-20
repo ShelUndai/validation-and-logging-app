@@ -20,6 +20,7 @@ import {
   History,
   XCircle,
   ExternalLink,
+  Filter,
 } from "lucide-react"
 import { Progress } from "@/components/ui/progress"
 import { Badge } from "@/components/ui/badge"
@@ -30,6 +31,7 @@ import { Label } from "@/components/ui/label"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 interface ValidationResult {
   item: string
@@ -53,7 +55,20 @@ interface ValidationLog {
   duration: string
   mnemonic: string
   description: string
+  line_of_business: string
 }
+
+// Available lines of business for filtering
+const LINES_OF_BUSINESS = [
+  "All",
+  "Technology",
+  "Finance",
+  "Operations",
+  "Marketing",
+  "Human Resources",
+  "Legal",
+  "Customer Service",
+] as const
 
 interface ChangeValidation {
   change_number: string
@@ -101,6 +116,7 @@ const mockAllHistory: ValidationLog[] = [
     duration: "2.3s",
     mnemonic: "WEB",
     description: "Web Application Security Update",
+    line_of_business: "Technology",
   },
   {
     id: "VAL-CHG1234568-001",
@@ -115,6 +131,7 @@ const mockAllHistory: ValidationLog[] = [
     duration: "2.1s",
     mnemonic: "CSO",
     description: "Database Migration Phase 2",
+    line_of_business: "Operations",
   },
   {
     id: "VAL-CHG1234569-001",
@@ -129,6 +146,7 @@ const mockAllHistory: ValidationLog[] = [
     duration: "2.5s",
     mnemonic: "AUTH",
     description: "Authentication Service Upgrade",
+    line_of_business: "Technology",
   },
   {
     id: "VAL-CHG1234570-001",
@@ -143,6 +161,7 @@ const mockAllHistory: ValidationLog[] = [
     duration: "2.0s",
     mnemonic: "API",
     description: "API Gateway Configuration",
+    line_of_business: "Finance",
   },
   {
     id: "VAL-CHG1234571-001",
@@ -157,15 +176,46 @@ const mockAllHistory: ValidationLog[] = [
     duration: "2.4s",
     mnemonic: "CSO",
     description: "Firewall Rule Update",
+    line_of_business: "Operations",
+  },
+  {
+    id: "VAL-CHG1234572-001",
+    change_number: "CHG1234572",
+    executed_by: "klee",
+    executed_at: "2025-01-13T11:30:00Z",
+    result: "pass",
+    overall_score: 100,
+    passed_checks: 17,
+    failed_checks: 0,
+    total_checks: 17,
+    duration: "2.2s",
+    mnemonic: "HR",
+    description: "Employee Portal Update",
+    line_of_business: "Human Resources",
+  },
+  {
+    id: "VAL-CHG1234573-001",
+    change_number: "CHG1234573",
+    executed_by: "mchen",
+    executed_at: "2025-01-12T15:45:00Z",
+    result: "warn",
+    overall_score: 78,
+    passed_checks: 11,
+    failed_checks: 3,
+    total_checks: 14,
+    duration: "2.6s",
+    mnemonic: "MKT",
+    description: "Marketing Analytics Dashboard",
+    line_of_business: "Marketing",
   },
 ]
 
-const generateMockHistory = (changeNumber: string): ValidationLog[] => {
+const generateMockHistory = (changeNumber: string, lobFilter?: string): ValidationLog[] => {
   const isPassingChange = changeNumber.toLowerCase().includes("pass") || 
                           changeNumber.toLowerCase().includes("good") || 
                           changeNumber === "CHG0000001"
   
-  return [
+  const logs: ValidationLog[] = [
     {
       id: `VAL-${changeNumber}-001`,
       change_number: changeNumber,
@@ -179,6 +229,7 @@ const generateMockHistory = (changeNumber: string): ValidationLog[] => {
       duration: "2.3s",
       mnemonic: "CSO",
       description: "7/1 Production Release for PMC One Power Platform Apps (CSO)",
+      line_of_business: "Technology",
     },
     {
       id: `VAL-${changeNumber}-002`,
@@ -193,6 +244,7 @@ const generateMockHistory = (changeNumber: string): ValidationLog[] => {
       duration: "2.1s",
       mnemonic: "CSO",
       description: "7/1 Production Release for PMC One Power Platform Apps (CSO)",
+      line_of_business: "Technology",
     },
     {
       id: `VAL-${changeNumber}-003`,
@@ -207,8 +259,14 @@ const generateMockHistory = (changeNumber: string): ValidationLog[] => {
       duration: "2.5s",
       mnemonic: "CSO",
       description: "7/1 Production Release for PMC One Power Platform Apps (CSO)",
+      line_of_business: "Technology",
     },
   ]
+  
+  if (lobFilter && lobFilter !== "All") {
+    return logs.filter(log => log.line_of_business === lobFilter)
+  }
+  return logs
 }
 
 const validateChangeRecord = async (changeNumber: string): Promise<ChangeValidation | null> => {
@@ -605,6 +663,7 @@ export default function ChangeLookupPage() {
   // History tab state
   const [historySearchQuery, setHistorySearchQuery] = useState("")
   const [historySubmittedQuery, setHistorySubmittedQuery] = useState("")
+  const [historyLobFilter, setHistoryLobFilter] = useState("All")
   const [historyLogs, setHistoryLogs] = useState<ValidationLog[]>(mockAllHistory)
   const [historyExpandedRows, setHistoryExpandedRows] = useState<Set<string>>(new Set())
   const [historyLoading, setHistoryLoading] = useState(false)
@@ -641,22 +700,32 @@ export default function ChangeLookupPage() {
   }
 
   // History functions
-  const fetchHistory = async (changeNum: string) => {
+  const fetchHistory = async (changeNum: string, lobFilter: string = "All") => {
     setHistoryLoading(true)
     await new Promise((resolve) => setTimeout(resolve, 500))
     
+    let filteredLogs: ValidationLog[]
+    
     if (changeNum) {
-      const history = generateMockHistory(changeNum)
-      setHistoryLogs(history)
+      filteredLogs = generateMockHistory(changeNum, lobFilter)
     } else {
-      setHistoryLogs(mockAllHistory)
+      filteredLogs = lobFilter === "All" 
+        ? mockAllHistory 
+        : mockAllHistory.filter(log => log.line_of_business === lobFilter)
     }
+    
+    setHistoryLogs(filteredLogs)
     setHistoryLoading(false)
   }
 
   const handleHistorySearch = () => {
     setHistorySubmittedQuery(historySearchQuery)
-    fetchHistory(historySearchQuery)
+    fetchHistory(historySearchQuery, historyLobFilter)
+  }
+
+  const handleLobFilterChange = (value: string) => {
+    setHistoryLobFilter(value)
+    fetchHistory(historySubmittedQuery, value)
   }
 
   const handleHistoryKeyPress = (e: React.KeyboardEvent) => {
@@ -1062,8 +1131,10 @@ export default function ChangeLookupPage() {
                       <h4 className="font-medium mb-1">Searching:</h4>
                       <ul className="list-disc list-inside space-y-1 ml-2">
                         <li>Enter a change number in the search box and click "Search" to filter results</li>
-                        <li>Click "Clear" to return to viewing all recent logs</li>
-                        <li>Use "Export CSV" to download the current view for reporting</li>
+                        <li>Use the <span className="text-primary font-medium">Line of Business</span> dropdown to filter by department or business unit</li>
+                        <li>Combine both filters to narrow down results further</li>
+                        <li>Click "Clear All" to reset all filters and return to viewing all logs</li>
+                        <li>Use "Export CSV" to download the current filtered view for reporting</li>
                       </ul>
                     </div>
                     <div>
@@ -1097,10 +1168,10 @@ export default function ChangeLookupPage() {
               <CardHeader className="pb-3">
                 <CardTitle className="text-base">Search Validation History</CardTitle>
                 <CardDescription>
-                  Search for validation history by change number, or browse all recent validation attempts
+                  Search for validation history by change number, filter by line of business, or browse all recent validation attempts
                 </CardDescription>
               </CardHeader>
-              <CardContent>
+              <CardContent className="space-y-3">
                 <div className="flex gap-2">
                   <div className="relative flex-1">
                     <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -1115,17 +1186,39 @@ export default function ChangeLookupPage() {
                   <Button onClick={handleHistorySearch} disabled={historyLoading}>
                     {historyLoading ? "Searching..." : "Search"}
                   </Button>
-                  {historySubmittedQuery && (
+                  {(historySubmittedQuery || historyLobFilter !== "All") && (
                     <Button 
                       variant="outline" 
                       onClick={() => {
                         setHistorySearchQuery("")
                         setHistorySubmittedQuery("")
+                        setHistoryLobFilter("All")
                         setHistoryLogs(mockAllHistory)
                       }}
                     >
-                      Clear
+                      Clear All
                     </Button>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  <Filter className="h-4 w-4 text-muted-foreground" />
+                  <Label htmlFor="lob-filter" className="text-sm text-muted-foreground">Line of Business:</Label>
+                  <Select value={historyLobFilter} onValueChange={handleLobFilterChange}>
+                    <SelectTrigger id="lob-filter" className="w-[200px]">
+                      <SelectValue placeholder="Select LOB" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {LINES_OF_BUSINESS.map((lob) => (
+                        <SelectItem key={lob} value={lob}>
+                          {lob}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {historyLobFilter !== "All" && (
+                    <Badge variant="secondary" className="ml-2">
+                      Filtered: {historyLobFilter}
+                    </Badge>
                   )}
                 </div>
               </CardContent>
@@ -1168,6 +1261,7 @@ export default function ChangeLookupPage() {
                           <TableHead className="w-[40px]"></TableHead>
                           {!historySubmittedQuery && <TableHead>Change #</TableHead>}
                           <TableHead>Validation ID</TableHead>
+                          <TableHead>Line of Business</TableHead>
                           <TableHead>Executed By</TableHead>
                           <TableHead>Date & Time</TableHead>
                           <TableHead>Result</TableHead>
@@ -1198,7 +1292,7 @@ export default function ChangeLookupPage() {
                                       e.stopPropagation()
                                       setHistorySearchQuery(log.change_number)
                                       setHistorySubmittedQuery(log.change_number)
-                                      fetchHistory(log.change_number)
+                                      fetchHistory(log.change_number, historyLobFilter)
                                     }}
                                   >
                                     {log.change_number}
@@ -1206,6 +1300,11 @@ export default function ChangeLookupPage() {
                                 </TableCell>
                               )}
                               <TableCell className="font-mono text-sm">{log.id}</TableCell>
+                              <TableCell>
+                                <Badge variant="outline" className="font-normal">
+                                  {log.line_of_business}
+                                </Badge>
+                              </TableCell>
                               <TableCell>
                                 <div className="flex items-center gap-1">
                                   <User className="h-3 w-3 text-muted-foreground" />
@@ -1228,7 +1327,7 @@ export default function ChangeLookupPage() {
                             </TableRow>
                             {historyExpandedRows.has(log.id) && (
                               <TableRow className="bg-muted/30">
-                                <TableCell colSpan={historySubmittedQuery ? 7 : 8} className="p-4">
+                                <TableCell colSpan={historySubmittedQuery ? 8 : 9} className="p-4">
                                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                                     <div>
                                       <span className="text-muted-foreground">Mnemonic:</span>
