@@ -2,6 +2,7 @@
 
 import React, { useState } from "react"
 import Link from "next/link"
+import confetti from "canvas-confetti"
 import {
   AlertCircle,
   AlertTriangle,
@@ -785,6 +786,52 @@ export default function ChangeLookupPage() {
   const [historyExpandedRows, setHistoryExpandedRows] = useState<Set<string>>(new Set())
   const [historyLoading, setHistoryLoading] = useState(false)
 
+  const celebratePass = () => {
+    if (typeof window === "undefined") return
+    // Respect users who prefer reduced motion
+    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return
+
+    const duration = 2500
+    const animationEnd = Date.now() + duration
+    const colors = ["#16a34a", "#22c55e", "#4ade80", "#86efac", "#ffffff"]
+
+    // Initial celebratory burst from the center
+    confetti({
+      particleCount: 160,
+      spread: 100,
+      startVelocity: 45,
+      origin: { x: 0.5, y: 0.5 },
+      colors,
+      zIndex: 9999,
+    })
+
+    // Continuous side cannons for a full-page effect
+    const interval = window.setInterval(() => {
+      const timeLeft = animationEnd - Date.now()
+      if (timeLeft <= 0) {
+        window.clearInterval(interval)
+        return
+      }
+      const particleCount = 50 * (timeLeft / duration)
+      confetti({
+        particleCount,
+        angle: 60,
+        spread: 70,
+        origin: { x: 0, y: 0.7 },
+        colors,
+        zIndex: 9999,
+      })
+      confetti({
+        particleCount,
+        angle: 120,
+        spread: 70,
+        origin: { x: 1, y: 0.7 },
+        colors,
+        zIndex: 9999,
+      })
+    }, 250)
+  }
+
   const handleValidation = async () => {
     if (!changeNumber.trim()) {
       setError("Please enter a change number")
@@ -801,6 +848,9 @@ export default function ChangeLookupPage() {
         setError(`Change number "${changeNumber}" was not found. Please verify the change number and try again.`)
       } else {
         setValidationResult(result)
+        if (result.validation_status === "pass" && result.summary.failed === 0) {
+          celebratePass()
+        }
       }
     } catch (err) {
       setError("Failed to validate change record. Please check the change number and try again.")
