@@ -777,6 +777,7 @@ export default function ChangeLookupPage() {
   const [showHelp, setShowHelp] = useState(false)
   const [showHistoryHelp, setShowHistoryHelp] = useState(false)
   const [activeTab, setActiveTab] = useState("validation")
+  const [showCelebration, setShowCelebration] = useState(false)
   
   // History tab state
   const [historySearchQuery, setHistorySearchQuery] = useState("")
@@ -790,6 +791,10 @@ export default function ChangeLookupPage() {
     if (typeof window === "undefined") return
     // Respect users who prefer reduced motion
     if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return
+
+    // Show the animated hero popup
+    setShowCelebration(true)
+    window.setTimeout(() => setShowCelebration(false), 3200)
 
     const duration = 2500
     const animationEnd = Date.now() + duration
@@ -940,6 +945,23 @@ export default function ChangeLookupPage() {
 
   return (
     <div className="flex min-h-screen w-full flex-col bg-muted/40">
+      {showCelebration && (
+        <div
+          className="pointer-events-none fixed inset-0 z-[9998] flex items-center justify-center"
+          role="status"
+          aria-live="polite"
+        >
+          <div className="animate-celebration-pop flex flex-col items-center gap-4 rounded-2xl bg-green-600 px-10 py-8 text-white shadow-2xl ring-4 ring-green-400/40">
+            <div className="flex h-20 w-20 items-center justify-center rounded-full bg-white/15">
+              <CheckCircle className="h-14 w-14 text-white" strokeWidth={2.5} />
+            </div>
+            <div className="text-center">
+              <p className="text-2xl font-bold tracking-tight text-balance">Your CR is Ready for Approval!</p>
+              <p className="mt-1 text-sm text-green-50/90">All validation checks passed successfully.</p>
+            </div>
+          </div>
+        </div>
+      )}
       <header className="sticky top-0 z-10 flex flex-col border-b bg-background">
         <div className="flex h-14 items-center gap-4 px-4 sm:px-6">
           <h1 className="text-lg font-semibold">MOZ Dash</h1>
