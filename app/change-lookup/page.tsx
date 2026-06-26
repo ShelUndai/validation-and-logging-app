@@ -1182,7 +1182,7 @@ export default function ChangeLookupPage() {
                                         <div className="flex items-center justify-center w-5 h-5 bg-red-600 text-white text-xs font-bold rounded-full flex-shrink-0">
                                           {i + 1}
                                         </div>
-                                        <div className="flex-1 rounded-md border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-900 dark:border-red-900 dark:bg-red-950/40 dark:text-red-100">
+                                        <div className="flex-1 rounded-md border bg-muted/40 px-3 py-2 text-sm">
                                           {item}
                                         </div>
                                       </div>
@@ -1203,7 +1203,7 @@ export default function ChangeLookupPage() {
                                         <div className="flex items-center justify-center w-5 h-5 bg-amber-600 text-white text-xs font-bold rounded-full flex-shrink-0">
                                           {i + 1}
                                         </div>
-                                        <div className="flex-1 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-100">
+                                        <div className="flex-1 rounded-md border bg-muted/40 px-3 py-2 text-sm">
                                           {item}
                                         </div>
                                       </div>
