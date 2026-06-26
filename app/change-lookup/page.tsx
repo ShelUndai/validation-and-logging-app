@@ -1155,25 +1155,12 @@ export default function ChangeLookupPage() {
                               </span>
                             )}
                             {sectionStatus === "pass" ? (
-                              <Badge className="bg-green-100 text-green-900 hover:bg-green-100 dark:bg-green-950 dark:text-green-200 text-xs">Passed</Badge>
-                            ) : sectionStatus === "warn" ? (
-                              <Badge className="bg-amber-100 text-amber-900 hover:bg-amber-100 dark:bg-amber-950 dark:text-amber-200 text-xs">Warnings</Badge>
+                              <Badge className="bg-green-500 hover:bg-green-600 text-xs px-2 py-0.5">
+                                <Check className="w-2.5 h-2.5 mr-1" /> Ready
+                              </Badge>
                             ) : (
-                              <Badge className="bg-red-100 text-red-900 hover:bg-red-100 dark:bg-red-950 dark:text-red-200 text-xs">Errors</Badge>
-                            )}
-                            {errorCount > 0 && (
-                              <Badge variant="outline" className="text-xs border-red-300 text-red-800 dark:border-red-800 dark:text-red-300">
-                                {errorCount} error{errorCount !== 1 ? "s" : ""}
-                              </Badge>
-                            )}
-                            {warningCount > 0 && (
-                              <Badge variant="outline" className="text-xs border-amber-300 text-amber-800 dark:border-amber-800 dark:text-amber-300">
-                                {warningCount} warning{warningCount !== 1 ? "s" : ""}
-                              </Badge>
-                            )}
-                            {actionCount > 0 && (
-                              <Badge variant="outline" className="text-xs">
-                                {actionCount} action item{actionCount !== 1 ? "s" : ""}
+                              <Badge className="bg-red-500 hover:bg-red-600 text-xs px-2 py-0.5">
+                                <X className="w-2.5 h-2.5 mr-1" /> Not Ready
                               </Badge>
                             )}
                           </div>
