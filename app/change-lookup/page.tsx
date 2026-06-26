@@ -2,6 +2,7 @@
 
 import React, { useState } from "react"
 import Link from "next/link"
+import confetti from "canvas-confetti"
 import {
   AlertCircle,
   AlertTriangle,
@@ -20,6 +21,9 @@ import {
   History,
   XCircle,
   ExternalLink,
+  Filter,
+  LogOut,
+  Menu,
 } from "lucide-react"
 import { Progress } from "@/components/ui/progress"
 import { Badge } from "@/components/ui/badge"
@@ -30,6 +34,17 @@ import { Label } from "@/components/ui/label"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import { APP_VERSION } from "@/lib/version"
 
 interface ValidationResult {
   item: string
@@ -38,6 +53,36 @@ interface ValidationResult {
   message: string
   details?: string
   required: boolean
+}
+
+// Systematized per-section validation output
+interface ValidationSection {
+  info: string[]
+  warning: string[]
+  action_items: string[]
+  error: string[]
+  not_applicable: string[]
+}
+
+type ValidationSections = Record<string, ValidationSection>
+
+// Human-readable display names for known section keys
+const SECTION_DISPLAY_NAMES: Record<string, string> = {
+  ctasks: "Change Tasks (CTasks)",
+  mtsa: "Manual Test Strategy & Approach (MTSA)",
+  cr_fields_check: "CR Fields Check",
+  tsr: "Test Strategy Repository (TSR)",
+  tsa: "Test Strategy & Approach (TSA)",
+  attachments: "Attachments",
+  callbacks: "Callbacks",
+}
+
+const humanizeSectionKey = (key: string): string => {
+  if (SECTION_DISPLAY_NAMES[key]) return SECTION_DISPLAY_NAMES[key]
+  return key
+    .split(/[_\s]+/)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ")
 }
 
 interface ValidationLog {
@@ -53,7 +98,20 @@ interface ValidationLog {
   duration: string
   mnemonic: string
   description: string
+  line_of_business: string
 }
+
+// Available lines of business for filtering
+const LINES_OF_BUSINESS = [
+  "All",
+  "Technology",
+  "Finance",
+  "Operations",
+  "Marketing",
+  "Human Resources",
+  "Legal",
+  "Customer Service",
+] as const
 
 interface ChangeValidation {
   change_number: string
@@ -75,6 +133,7 @@ interface ChangeValidation {
     end_date: string
   }
   validation_results: ValidationResult[]
+  validation_logs: ValidationSections
   summary: {
     total_checks: number
     passed: number
@@ -101,6 +160,7 @@ const mockAllHistory: ValidationLog[] = [
     duration: "2.3s",
     mnemonic: "WEB",
     description: "Web Application Security Update",
+    line_of_business: "Technology",
   },
   {
     id: "VAL-CHG1234568-001",
@@ -115,6 +175,7 @@ const mockAllHistory: ValidationLog[] = [
     duration: "2.1s",
     mnemonic: "CSO",
     description: "Database Migration Phase 2",
+    line_of_business: "Operations",
   },
   {
     id: "VAL-CHG1234569-001",
@@ -129,6 +190,7 @@ const mockAllHistory: ValidationLog[] = [
     duration: "2.5s",
     mnemonic: "AUTH",
     description: "Authentication Service Upgrade",
+    line_of_business: "Technology",
   },
   {
     id: "VAL-CHG1234570-001",
@@ -143,6 +205,7 @@ const mockAllHistory: ValidationLog[] = [
     duration: "2.0s",
     mnemonic: "API",
     description: "API Gateway Configuration",
+    line_of_business: "Finance",
   },
   {
     id: "VAL-CHG1234571-001",
@@ -157,15 +220,46 @@ const mockAllHistory: ValidationLog[] = [
     duration: "2.4s",
     mnemonic: "CSO",
     description: "Firewall Rule Update",
+    line_of_business: "Operations",
+  },
+  {
+    id: "VAL-CHG1234572-001",
+    change_number: "CHG1234572",
+    executed_by: "klee",
+    executed_at: "2025-01-13T11:30:00Z",
+    result: "pass",
+    overall_score: 100,
+    passed_checks: 17,
+    failed_checks: 0,
+    total_checks: 17,
+    duration: "2.2s",
+    mnemonic: "HR",
+    description: "Employee Portal Update",
+    line_of_business: "Human Resources",
+  },
+  {
+    id: "VAL-CHG1234573-001",
+    change_number: "CHG1234573",
+    executed_by: "mchen",
+    executed_at: "2025-01-12T15:45:00Z",
+    result: "warn",
+    overall_score: 78,
+    passed_checks: 11,
+    failed_checks: 3,
+    total_checks: 14,
+    duration: "2.6s",
+    mnemonic: "MKT",
+    description: "Marketing Analytics Dashboard",
+    line_of_business: "Marketing",
   },
 ]
 
-const generateMockHistory = (changeNumber: string): ValidationLog[] => {
+const generateMockHistory = (changeNumber: string, lobFilter?: string): ValidationLog[] => {
   const isPassingChange = changeNumber.toLowerCase().includes("pass") || 
                           changeNumber.toLowerCase().includes("good") || 
                           changeNumber === "CHG0000001"
   
-  return [
+  const logs: ValidationLog[] = [
     {
       id: `VAL-${changeNumber}-001`,
       change_number: changeNumber,
@@ -179,6 +273,7 @@ const generateMockHistory = (changeNumber: string): ValidationLog[] => {
       duration: "2.3s",
       mnemonic: "CSO",
       description: "7/1 Production Release for PMC One Power Platform Apps (CSO)",
+      line_of_business: "Technology",
     },
     {
       id: `VAL-${changeNumber}-002`,
@@ -193,6 +288,7 @@ const generateMockHistory = (changeNumber: string): ValidationLog[] => {
       duration: "2.1s",
       mnemonic: "CSO",
       description: "7/1 Production Release for PMC One Power Platform Apps (CSO)",
+      line_of_business: "Technology",
     },
     {
       id: `VAL-${changeNumber}-003`,
@@ -207,8 +303,14 @@ const generateMockHistory = (changeNumber: string): ValidationLog[] => {
       duration: "2.5s",
       mnemonic: "CSO",
       description: "7/1 Production Release for PMC One Power Platform Apps (CSO)",
+      line_of_business: "Technology",
     },
   ]
+  
+  if (lobFilter && lobFilter !== "All") {
+    return logs.filter(log => log.line_of_business === lobFilter)
+  }
+  return logs
 }
 
 const validateChangeRecord = async (changeNumber: string): Promise<ChangeValidation | null> => {
@@ -286,6 +388,40 @@ Failed: 0
         end_date: "2025-01-20T11:00:00Z",
       },
       validation_results: [],
+      validation_logs: {
+        ctasks: {
+          info: [
+            "CTask CTASK0045511 found and linked to parent CR",
+            "All CTasks in valid state for implementation",
+            "Peer reviewer assigned and confirmed",
+          ],
+          warning: [],
+          action_items: [],
+          error: [],
+          not_applicable: [],
+        },
+        mtsa: {
+          info: [
+            "MTSA file found: 'Manual Test Strategy and Approach 25.07.01.xlsx'",
+            "MTSA file data and answers reviewed successfully",
+          ],
+          warning: [],
+          action_items: [],
+          error: [],
+          not_applicable: [],
+        },
+        cr_fields_check: {
+          info: [
+            "CI Field Check Passed: All required fields completed",
+            "CI Start Time Valid: 2025/01/20 09:00",
+            "Validation Plan found and validated",
+          ],
+          warning: [],
+          action_items: [],
+          error: [],
+          not_applicable: [],
+        },
+      },
       summary: {
         total_checks: 17,
         passed: 17,
@@ -364,6 +500,46 @@ Failed: 6
         end_date: "2025-01-15T04:00:00Z",
       },
       validation_results: [],
+      validation_logs: {
+        ctasks: {
+          info: ["CTask CTASK0045511 found and linked to parent CR", "Peer reviewer found"],
+          warning: ["Test filename 'Test Workbook 25.07.01.xlsx' does not contain CSO mnemonic"],
+          action_items: ["Rename the test workbook to include the CSO mnemonic"],
+          error: [],
+          not_applicable: [],
+        },
+        mtsa: {
+          info: [],
+          warning: [
+            "Auto TSR: Data is missing for all columns, manual review required for Test Sets",
+            "Auto TSR: Data is missing for certain columns (Component, Description, Values, Environment)",
+          ],
+          action_items: [
+            "Upload a valid MTSA file before requesting approval",
+            "Review and complete MTSA file data and answers",
+          ],
+          error: [
+            "MTSA Required & Upload Found: Satisfied = False",
+            "Review MTSA File Data/Answers: Satisfied = False",
+          ],
+          not_applicable: [],
+        },
+        cr_fields_check: {
+          info: ["Validation Plan Regex Parsing attempted - checking for Validation Plan file"],
+          warning: ["CI Start Time Already Passed: 2024/07/19 09:00"],
+          action_items: [
+            "Answer all template questions in the CR form",
+            "Update the CR start time to a valid future date",
+            "Provide the post-implementation validation details in the required field",
+          ],
+          error: [
+            "CI Field Check Failed: 'What will the post-implementation validation prove?' is incomplete",
+            "All Template Questions Answered: Satisfied = False",
+            "Valid Start Date / Lead Time: Satisfied = False",
+          ],
+          not_applicable: [],
+        },
+      },
       summary: {
         total_checks: 14,
         passed: 8,
@@ -601,13 +777,65 @@ export default function ChangeLookupPage() {
   const [showHelp, setShowHelp] = useState(false)
   const [showHistoryHelp, setShowHistoryHelp] = useState(false)
   const [activeTab, setActiveTab] = useState("validation")
+  const [showCelebration, setShowCelebration] = useState(false)
   
   // History tab state
   const [historySearchQuery, setHistorySearchQuery] = useState("")
   const [historySubmittedQuery, setHistorySubmittedQuery] = useState("")
+  const [historyLobFilter, setHistoryLobFilter] = useState("All")
   const [historyLogs, setHistoryLogs] = useState<ValidationLog[]>(mockAllHistory)
   const [historyExpandedRows, setHistoryExpandedRows] = useState<Set<string>>(new Set())
   const [historyLoading, setHistoryLoading] = useState(false)
+
+  const celebratePass = () => {
+    if (typeof window === "undefined") return
+    // Respect users who prefer reduced motion
+    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return
+
+    // Show the animated hero popup
+    setShowCelebration(true)
+    window.setTimeout(() => setShowCelebration(false), 4500)
+
+    const duration = 2500
+    const animationEnd = Date.now() + duration
+    const colors = ["#16a34a", "#22c55e", "#4ade80", "#86efac", "#ffffff"]
+
+    // Initial celebratory burst from the center
+    confetti({
+      particleCount: 160,
+      spread: 100,
+      startVelocity: 45,
+      origin: { x: 0.5, y: 0.5 },
+      colors,
+      zIndex: 9999,
+    })
+
+    // Continuous side cannons for a full-page effect
+    const interval = window.setInterval(() => {
+      const timeLeft = animationEnd - Date.now()
+      if (timeLeft <= 0) {
+        window.clearInterval(interval)
+        return
+      }
+      const particleCount = 50 * (timeLeft / duration)
+      confetti({
+        particleCount,
+        angle: 60,
+        spread: 70,
+        origin: { x: 0, y: 0.7 },
+        colors,
+        zIndex: 9999,
+      })
+      confetti({
+        particleCount,
+        angle: 120,
+        spread: 70,
+        origin: { x: 1, y: 0.7 },
+        colors,
+        zIndex: 9999,
+      })
+    }, 250)
+  }
 
   const handleValidation = async () => {
     if (!changeNumber.trim()) {
@@ -625,6 +853,9 @@ export default function ChangeLookupPage() {
         setError(`Change number "${changeNumber}" was not found. Please verify the change number and try again.`)
       } else {
         setValidationResult(result)
+        if (result.validation_status === "pass" && result.summary.failed === 0) {
+          celebratePass()
+        }
       }
     } catch (err) {
       setError("Failed to validate change record. Please check the change number and try again.")
@@ -641,22 +872,32 @@ export default function ChangeLookupPage() {
   }
 
   // History functions
-  const fetchHistory = async (changeNum: string) => {
+  const fetchHistory = async (changeNum: string, lobFilter: string = "All") => {
     setHistoryLoading(true)
     await new Promise((resolve) => setTimeout(resolve, 500))
     
+    let filteredLogs: ValidationLog[]
+    
     if (changeNum) {
-      const history = generateMockHistory(changeNum)
-      setHistoryLogs(history)
+      filteredLogs = generateMockHistory(changeNum, lobFilter)
     } else {
-      setHistoryLogs(mockAllHistory)
+      filteredLogs = lobFilter === "All" 
+        ? mockAllHistory 
+        : mockAllHistory.filter(log => log.line_of_business === lobFilter)
     }
+    
+    setHistoryLogs(filteredLogs)
     setHistoryLoading(false)
   }
 
   const handleHistorySearch = () => {
     setHistorySubmittedQuery(historySearchQuery)
-    fetchHistory(historySearchQuery)
+    fetchHistory(historySearchQuery, historyLobFilter)
+  }
+
+  const handleLobFilterChange = (value: string) => {
+    setHistoryLobFilter(value)
+    fetchHistory(historySubmittedQuery, value)
   }
 
   const handleHistoryKeyPress = (e: React.KeyboardEvent) => {
@@ -704,11 +945,47 @@ export default function ChangeLookupPage() {
 
   return (
     <div className="flex min-h-screen w-full flex-col bg-muted/40">
+      {showCelebration && (
+        <div
+          className="pointer-events-none fixed inset-0 z-[9998] flex items-center justify-center"
+          role="status"
+          aria-live="polite"
+        >
+          <div className="animate-celebration-pop flex flex-col items-center gap-4 rounded-2xl bg-green-600 px-10 py-8 text-white shadow-2xl ring-4 ring-green-400/40">
+            <div className="flex h-20 w-20 items-center justify-center rounded-full bg-white/15">
+              <CheckCircle className="h-14 w-14 text-white" strokeWidth={2.5} />
+            </div>
+            <div className="text-center">
+              <p className="text-2xl font-bold tracking-tight text-balance">Ready for Approval!</p>
+            </div>
+          </div>
+        </div>
+      )}
       <header className="sticky top-0 z-10 flex flex-col border-b bg-background">
         <div className="flex h-14 items-center gap-4 px-4 sm:px-6">
           <h1 className="text-lg font-semibold">MOZ Dash</h1>
           <span className="text-muted-foreground">|</span>
           <span className="text-sm text-muted-foreground">CR Validation Automation</span>
+          <div className="ml-auto">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon">
+                  <Menu className="h-5 w-5" />
+                  <span className="sr-only">Open menu</span>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-48">
+                <DropdownMenuLabel>My Account</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => console.log("[v0] Logout clicked")}>
+                  <LogOut className="mr-2 h-4 w-4" />
+                  Log out
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <div className="px-2 py-1.5 text-xs text-muted-foreground">{APP_VERSION}</div>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         </div>
         <Tabs value={activeTab} onValueChange={setActiveTab} className="px-4 sm:px-6">
           <TabsList className="h-10">
@@ -874,133 +1151,172 @@ export default function ChangeLookupPage() {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 flex-1 overflow-hidden">
-              <Card className="flex flex-col overflow-hidden">
-                <CardHeader className="pb-3 flex-shrink-0">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <CardTitle className="text-base">Validation Output</CardTitle>
-                      <CardDescription className="text-sm">Automation script execution results</CardDescription>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <div className="flex flex-col gap-1 text-left items-start">
-                        <div className="text-xs font-medium text-muted-foreground">Overall Score</div>
-                        <div className="flex items-center gap-2">
-                          <div className="w-16">
-                            <Progress value={validationResult.overall_score} className="h-1.5" />
-                          </div>
-                          <div className="text-sm font-bold min-w-[3rem]">{validationResult.overall_score}%</div>
+            {/* Overall Score summary */}
+            <Card className="flex-shrink-0">
+              <CardContent className="py-4">
+                <div className="flex flex-wrap items-center justify-between gap-4">
+                  <div>
+                    <CardTitle className="text-base">Validation Output</CardTitle>
+                    <CardDescription className="text-sm">
+                      Automation results grouped by section
+                    </CardDescription>
+                  </div>
+                  <div className="flex items-center gap-4">
+                    <div className="flex flex-col gap-1 items-start">
+                      <div className="text-xs font-medium text-muted-foreground">Overall Score</div>
+                      <div className="flex items-center gap-2">
+                        <div className="w-24">
+                          <Progress value={validationResult.overall_score} className="h-1.5" />
                         </div>
-                      </div>
-                      <div className="flex flex-col items-center gap-0.5">
-                        {validationResult.validation_status === "pass" ? (
-                          <Badge className="bg-green-500 hover:bg-green-600 text-xs px-2 py-0.5">
-                            <Check className="w-2.5 h-2.5 mr-1" /> Ready
-                          </Badge>
-                        ) : validationResult.validation_status === "warn" ? (
-                          <Badge className="bg-yellow-500 hover:bg-yellow-600 text-xs px-2 py-0.5">
-                            <AlertTriangle className="w-2.5 h-2.5 mr-1" /> Caution
-                          </Badge>
-                        ) : (
-                          <Badge className="bg-red-500 hover:bg-red-600 text-xs px-2 py-0.5">
-                            <X className="w-2.5 h-2.5 mr-1" /> Not Ready
-                          </Badge>
-                        )}
-                        <div className="text-xs text-muted-foreground">
-                          {validationResult.summary.passed}/{validationResult.summary.total_checks} passed
-                        </div>
+                        <div className="text-sm font-bold min-w-[3rem]">{validationResult.overall_score}%</div>
                       </div>
                     </div>
-                  </div>
-                </CardHeader>
-                <CardContent className="flex-1 overflow-hidden">
-                  <div className="bg-gray-900 text-gray-100 p-4 rounded-lg font-mono text-sm h-full overflow-auto">
-                    <pre className="whitespace-pre-wrap">
-                      {validationResult.script_output.split("\n").map((line, index) => {
-                        const lineNumber = index + 1
-                        let lineClass = "text-gray-100"
-
-                        if (line.startsWith("INFO:")) {
-                          lineClass = "text-blue-400"
-                        } else if (line.startsWith("WARNING:")) {
-                          lineClass = "text-yellow-400"
-                        } else if (line.startsWith("ERROR:")) {
-                          lineClass = "text-red-400"
-                        } else if (line.includes("Satisfied: True")) {
-                          lineClass = "text-green-400"
-                        } else if (line.includes("Satisfied: False")) {
-                          lineClass = "text-red-400"
-                        } else if (line.includes("Passed:") || line.includes("Failed:")) {
-                          lineClass = "text-white font-semibold"
-                        }
-
-                        return (
-                          <div key={index} className="flex">
-                            <span className="text-gray-500 select-none w-8 text-right mr-4 flex-shrink-0">
-                              {lineNumber}
-                            </span>
-                            <span className={lineClass}>{line}</span>
-                          </div>
-                        )
-                      })}
-                    </pre>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <div className="flex flex-col gap-4 overflow-hidden">
-                <div className="flex-1 flex flex-col overflow-hidden">
-                  <div className="pb-3 flex-shrink-0">
-                    <div className="flex items-center gap-2 mb-1">
+                    <div className="flex flex-col items-center gap-0.5">
                       {validationResult.validation_status === "pass" ? (
-                        <>
-                          <CheckCircle className="h-4 w-4 text-green-500" />
-                          <h3 className="text-base font-semibold">Ready for Approval</h3>
-                        </>
+                        <Badge className="bg-green-500 hover:bg-green-600 text-xs px-2 py-0.5">
+                          <Check className="w-2.5 h-2.5 mr-1" /> Ready
+                        </Badge>
+                      ) : validationResult.validation_status === "warn" ? (
+                        <Badge className="bg-yellow-500 hover:bg-yellow-600 text-xs px-2 py-0.5">
+                          <AlertTriangle className="w-2.5 h-2.5 mr-1" /> Caution
+                        </Badge>
                       ) : (
-                        <>
-                          <AlertTriangle className="h-4 w-4 text-amber-500" />
-                          <h3 className="text-base font-semibold">Next Steps & Action Items</h3>
-                        </>
+                        <Badge className="bg-red-500 hover:bg-red-600 text-xs px-2 py-0.5">
+                          <X className="w-2.5 h-2.5 mr-1" /> Not Ready
+                        </Badge>
                       )}
-                    </div>
-                    <p className="text-sm text-muted-foreground">
-                      {validationResult.validation_status === "pass"
-                        ? "All validation checks passed - ready to proceed"
-                        : "Complete these items to improve validation score"}
-                    </p>
-                  </div>
-                  <div className="flex-1 overflow-hidden">
-                    <div className="space-y-3 h-full overflow-y-auto">
-                      {validationResult.approval_actions.map((action, index) => (
-                        <div key={index} className="flex items-start gap-3">
-                          <div className="flex items-center justify-center w-6 h-6 bg-green-500 text-white text-xs font-bold rounded-full flex-shrink-0">
-                            {index + 1}
-                          </div>
-                          <Card className="flex-1">
-                            <CardContent className="p-3">
-                              <span className="text-sm font-medium text-green-700 dark:text-green-300">{action}</span>
-                            </CardContent>
-                          </Card>
-                        </div>
-                      ))}
-
-                      {validationResult.failed_requirements.map((requirement, index) => (
-                        <div key={index} className="flex items-start gap-3">
-                          <div className="flex items-center justify-center w-6 h-6 bg-amber-500 text-white text-xs font-bold rounded-full flex-shrink-0">
-                            {index + 1}
-                          </div>
-                          <Card className="flex-1">
-                            <CardContent className="p-3">
-                              <span className="text-sm font-medium">{requirement}</span>
-                            </CardContent>
-                          </Card>
-                        </div>
-                      ))}
+                      <div className="text-xs text-muted-foreground">
+                        {validationResult.summary.passed}/{validationResult.summary.total_checks} passed
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
+              </CardContent>
+            </Card>
+
+            {/* Per-section accordions */}
+            <div className="flex-1 overflow-y-auto pr-1">
+              <Accordion type="multiple" className="space-y-2">
+                {Object.entries(validationResult.validation_logs).map(([key, section]) => {
+                  const errorCount = section.error.length
+                  const warningCount = section.warning.length
+                  const actionCount = section.action_items.length
+                  const passedCount = section.info.length
+                  const sectionTotal = passedCount + warningCount + errorCount
+                  const sectionStatus = errorCount > 0 ? "error" : warningCount > 0 ? "warn" : "pass"
+
+                  return (
+                    <AccordionItem key={key} value={key} className="border rounded-lg bg-card px-4">
+                      <AccordionTrigger className="hover:no-underline py-3 gap-3 [&>svg:last-of-type]:hidden">
+                        <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200" />
+                        <div className="flex flex-1 flex-wrap items-center justify-between gap-3 pr-2">
+                          <div className="flex items-center gap-2 text-left">
+                            <span className="font-medium text-sm">{humanizeSectionKey(key)}</span>
+                          </div>
+                          <div className="flex items-center gap-1.5">
+                            {sectionTotal > 0 && (
+                              <span className="text-xs font-medium text-muted-foreground tabular-nums mr-0.5">
+                                {passedCount}/{sectionTotal} passed
+                              </span>
+                            )}
+                            {sectionStatus === "pass" ? (
+                              <Badge className="bg-green-500 hover:bg-green-600 text-xs px-2 py-0.5">
+                                <Check className="w-2.5 h-2.5 mr-1" /> Ready
+                              </Badge>
+                            ) : (
+                              <Badge className="bg-red-500 hover:bg-red-600 text-xs px-2 py-0.5">
+                                <X className="w-2.5 h-2.5 mr-1" /> Not Ready
+                              </Badge>
+                            )}
+                          </div>
+                        </div>
+                      </AccordionTrigger>
+                      <AccordionContent>
+                        {errorCount === 0 && warningCount === 0 && actionCount === 0 ? (
+                          <div className="flex items-center gap-2 text-sm text-muted-foreground pt-1 pb-2">
+                            <CheckCircle className="h-4 w-4 text-green-700 dark:text-green-400" />
+                            No issues found in this section.
+                          </div>
+                        ) : (
+                          <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-6 gap-y-4 pt-1 pb-2">
+                            {/* Left column: errors + warnings */}
+                            <div className="space-y-4">
+                              {errorCount > 0 && (
+                                <div>
+                                  <Badge className="mb-2 bg-red-600 hover:bg-red-600 text-white text-xs">Errors</Badge>
+                                  <div className="rounded-md border overflow-hidden">
+                                    <Table>
+                                      <TableBody>
+                                        {section.error.map((item, i) => (
+                                          <TableRow key={i}>
+                                            <TableCell className="w-10 text-center align-middle font-bold text-red-700 dark:text-red-400 tabular-nums">
+                                              {i + 1}
+                                            </TableCell>
+                                            <TableCell className="align-middle text-sm">{item}</TableCell>
+                                          </TableRow>
+                                        ))}
+                                      </TableBody>
+                                    </Table>
+                                  </div>
+                                </div>
+                              )}
+
+                              {warningCount > 0 && (
+                                <div>
+                                  <Badge className="mb-2 bg-amber-600 hover:bg-amber-600 text-white text-xs">Warnings</Badge>
+                                  <div className="rounded-md border overflow-hidden">
+                                    <Table>
+                                      <TableBody>
+                                        {section.warning.map((item, i) => (
+                                          <TableRow key={i}>
+                                            <TableCell className="w-10 text-center align-middle font-bold text-amber-700 dark:text-amber-400 tabular-nums">
+                                              {i + 1}
+                                            </TableCell>
+                                            <TableCell className="align-middle text-sm">{item}</TableCell>
+                                          </TableRow>
+                                        ))}
+                                      </TableBody>
+                                    </Table>
+                                  </div>
+                                </div>
+                              )}
+
+                              {errorCount === 0 && warningCount === 0 && (
+                                <div className="text-sm text-muted-foreground">No errors or warnings.</div>
+                              )}
+                            </div>
+
+                            {/* Right column: action items */}
+                            <div className="lg:border-l lg:pl-6">
+                              {actionCount > 0 ? (
+                                <div>
+                                  <Badge className="mb-2 text-xs">Action Items</Badge>
+                                  <div className="rounded-md border overflow-hidden">
+                                    <Table>
+                                      <TableBody>
+                                        {section.action_items.map((item, i) => (
+                                          <TableRow key={i}>
+                                            <TableCell className="w-10 text-center align-middle font-bold text-primary tabular-nums">
+                                              {i + 1}
+                                            </TableCell>
+                                            <TableCell className="align-middle text-sm">{item}</TableCell>
+                                          </TableRow>
+                                        ))}
+                                      </TableBody>
+                                    </Table>
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="text-sm text-muted-foreground">No action items required.</div>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </AccordionContent>
+                    </AccordionItem>
+                  )
+                })}
+              </Accordion>
             </div>
 
             <Card className="flex-shrink-0">
@@ -1062,8 +1378,10 @@ export default function ChangeLookupPage() {
                       <h4 className="font-medium mb-1">Searching:</h4>
                       <ul className="list-disc list-inside space-y-1 ml-2">
                         <li>Enter a change number in the search box and click "Search" to filter results</li>
-                        <li>Click "Clear" to return to viewing all recent logs</li>
-                        <li>Use "Export CSV" to download the current view for reporting</li>
+                        <li>Use the <span className="text-primary font-medium">Line of Business</span> dropdown to filter by department or business unit</li>
+                        <li>Combine both filters to narrow down results further</li>
+                        <li>Click "Clear All" to reset all filters and return to viewing all logs</li>
+                        <li>Use "Export CSV" to download the current filtered view for reporting</li>
                       </ul>
                     </div>
                     <div>
@@ -1097,10 +1415,10 @@ export default function ChangeLookupPage() {
               <CardHeader className="pb-3">
                 <CardTitle className="text-base">Search Validation History</CardTitle>
                 <CardDescription>
-                  Search for validation history by change number, or browse all recent validation attempts
+                  Search for validation history by change number, filter by line of business, or browse all recent validation attempts
                 </CardDescription>
               </CardHeader>
-              <CardContent>
+              <CardContent className="space-y-3">
                 <div className="flex gap-2">
                   <div className="relative flex-1">
                     <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -1115,16 +1433,17 @@ export default function ChangeLookupPage() {
                   <Button onClick={handleHistorySearch} disabled={historyLoading}>
                     {historyLoading ? "Searching..." : "Search"}
                   </Button>
-                  {historySubmittedQuery && (
+                  {(historySubmittedQuery || historyLobFilter !== "All") && (
                     <Button 
                       variant="outline" 
                       onClick={() => {
                         setHistorySearchQuery("")
                         setHistorySubmittedQuery("")
+                        setHistoryLobFilter("All")
                         setHistoryLogs(mockAllHistory)
                       }}
                     >
-                      Clear
+                      Clear All
                     </Button>
                   )}
                 </div>
@@ -1143,12 +1462,42 @@ export default function ChangeLookupPage() {
                       {historyLogs.length} validation attempt{historyLogs.length !== 1 ? "s" : ""} found
                     </CardDescription>
                   </div>
-                  {historyLogs.length > 0 && (
-                    <Button size="sm" variant="outline" onClick={downloadHistoryCSV}>
-                      <Download className="mr-2 h-4 w-4" />
-                      Export CSV
-                    </Button>
-                  )}
+                  <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-2">
+                      <Label htmlFor="lob-filter" className="text-sm text-muted-foreground whitespace-nowrap">Line of Business:</Label>
+                      <Select value={historyLobFilter} onValueChange={handleLobFilterChange}>
+                        <SelectTrigger id="lob-filter" className="w-[180px]">
+                          <SelectValue placeholder="All" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {LINES_OF_BUSINESS.map((lob) => (
+                            <SelectItem key={lob} value={lob}>
+                              {lob}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      {historyLobFilter !== "All" && (
+                        <Button 
+                          size="sm" 
+                          variant="ghost" 
+                          onClick={() => {
+                            setHistoryLobFilter("All")
+                            fetchHistory(historySubmittedQuery, "All")
+                          }}
+                          className="h-8 w-8 p-0"
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </div>
+                    {historyLogs.length > 0 && (
+                      <Button size="sm" variant="outline" onClick={downloadHistoryCSV}>
+                        <Download className="mr-2 h-4 w-4" />
+                        Export CSV
+                      </Button>
+                    )}
+                  </div>
                 </div>
               </CardHeader>
               <CardContent>
@@ -1168,6 +1517,7 @@ export default function ChangeLookupPage() {
                           <TableHead className="w-[40px]"></TableHead>
                           {!historySubmittedQuery && <TableHead>Change #</TableHead>}
                           <TableHead>Validation ID</TableHead>
+                          <TableHead>Line of Business</TableHead>
                           <TableHead>Executed By</TableHead>
                           <TableHead>Date & Time</TableHead>
                           <TableHead>Result</TableHead>
@@ -1198,7 +1548,7 @@ export default function ChangeLookupPage() {
                                       e.stopPropagation()
                                       setHistorySearchQuery(log.change_number)
                                       setHistorySubmittedQuery(log.change_number)
-                                      fetchHistory(log.change_number)
+                                      fetchHistory(log.change_number, historyLobFilter)
                                     }}
                                   >
                                     {log.change_number}
@@ -1206,6 +1556,11 @@ export default function ChangeLookupPage() {
                                 </TableCell>
                               )}
                               <TableCell className="font-mono text-sm">{log.id}</TableCell>
+                              <TableCell>
+                                <Badge variant="outline" className="font-normal">
+                                  {log.line_of_business}
+                                </Badge>
+                              </TableCell>
                               <TableCell>
                                 <div className="flex items-center gap-1">
                                   <User className="h-3 w-3 text-muted-foreground" />
@@ -1228,7 +1583,7 @@ export default function ChangeLookupPage() {
                             </TableRow>
                             {historyExpandedRows.has(log.id) && (
                               <TableRow className="bg-muted/30">
-                                <TableCell colSpan={historySubmittedQuery ? 7 : 8} className="p-4">
+                                <TableCell colSpan={historySubmittedQuery ? 8 : 9} className="p-4">
                                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                                     <div>
                                       <span className="text-muted-foreground">Mnemonic:</span>
