@@ -1130,6 +1130,8 @@ export default function ChangeLookupPage() {
                   const errorCount = section.error.length
                   const warningCount = section.warning.length
                   const actionCount = section.action_items.length
+                  const passedCount = section.info.length
+                  const sectionTotal = passedCount + warningCount + errorCount
                   const sectionStatus = errorCount > 0 ? "error" : warningCount > 0 ? "warn" : "pass"
 
                   return (
@@ -1147,6 +1149,11 @@ export default function ChangeLookupPage() {
                             <span className="font-medium text-sm">{humanizeSectionKey(key)}</span>
                           </div>
                           <div className="flex items-center gap-1.5">
+                            {sectionTotal > 0 && (
+                              <span className="text-xs font-medium text-muted-foreground tabular-nums mr-0.5">
+                                {passedCount}/{sectionTotal} passed
+                              </span>
+                            )}
                             {sectionStatus === "pass" ? (
                               <Badge className="bg-green-100 text-green-900 hover:bg-green-100 dark:bg-green-950 dark:text-green-200 text-xs">Passed</Badge>
                             ) : sectionStatus === "warn" ? (
