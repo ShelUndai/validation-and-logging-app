@@ -12,14 +12,14 @@
       opacity: 0;
       transform: translateY(-120%) scale(0.85);
     }
-    15% {
+    10% {
       opacity: 1;
       transform: translateY(0) scale(1.05);
     }
-    25% {
+    18% {
       transform: translateY(0) scale(1);
     }
-    80% {
+    88% {
       opacity: 1;
       transform: translateY(0) scale(1);
     }
@@ -30,7 +30,7 @@
   }
 
   .animate-celebration-pop {
-    animation: celebration-pop 3.2s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+    animation: celebration-pop 4.5s cubic-bezier(0.22, 1, 0.36, 1) forwards;
   }
 }
 

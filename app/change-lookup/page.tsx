@@ -794,7 +794,7 @@ export default function ChangeLookupPage() {
 
     // Show the animated hero popup
     setShowCelebration(true)
-    window.setTimeout(() => setShowCelebration(false), 3200)
+    window.setTimeout(() => setShowCelebration(false), 4500)
 
     const duration = 2500
     const animationEnd = Date.now() + duration
@@ -956,8 +956,7 @@ export default function ChangeLookupPage() {
               <CheckCircle className="h-14 w-14 text-white" strokeWidth={2.5} />
             </div>
             <div className="text-center">
-              <p className="text-2xl font-bold tracking-tight text-balance">Your CR is Ready for Approval!</p>
-              <p className="mt-1 text-sm text-green-50/90">All validation checks passed successfully.</p>
+              <p className="text-2xl font-bold tracking-tight text-balance">Ready for Approval!</p>
             </div>
           </div>
         </div>
