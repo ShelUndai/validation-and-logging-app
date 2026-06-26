@@ -1172,51 +1172,46 @@ export default function ChangeLookupPage() {
                             <div className="space-y-4">
                               {errorCount > 0 && (
                                 <div>
-                                  <div className="flex items-center gap-2 mb-2">
-                                    <XCircle className="h-4 w-4 text-red-700 dark:text-red-400" />
-                                    <h4 className="text-sm font-semibold text-red-800 dark:text-red-300">Errors</h4>
-                                  </div>
-                                  <div className="space-y-2">
-                                    {section.error.map((item, i) => (
-                                      <div key={i} className="flex items-center gap-3">
-                                        <div className="flex items-center justify-center w-5 h-5 bg-red-600 text-white text-xs font-bold rounded-full flex-shrink-0">
-                                          {i + 1}
-                                        </div>
-                                        <div className="flex-1 rounded-md border bg-muted/40 px-3 py-2 text-sm">
-                                          {item}
-                                        </div>
-                                      </div>
-                                    ))}
+                                  <Badge className="mb-2 bg-red-600 hover:bg-red-600 text-white text-xs">Errors</Badge>
+                                  <div className="rounded-md border overflow-hidden">
+                                    <Table>
+                                      <TableBody>
+                                        {section.error.map((item, i) => (
+                                          <TableRow key={i}>
+                                            <TableCell className="w-10 text-center align-middle font-bold text-red-700 dark:text-red-400 tabular-nums">
+                                              {i + 1}
+                                            </TableCell>
+                                            <TableCell className="align-middle text-sm">{item}</TableCell>
+                                          </TableRow>
+                                        ))}
+                                      </TableBody>
+                                    </Table>
                                   </div>
                                 </div>
                               )}
 
                               {warningCount > 0 && (
                                 <div>
-                                  <div className="flex items-center gap-2 mb-2">
-                                    <AlertTriangle className="h-4 w-4 text-amber-700 dark:text-amber-400" />
-                                    <h4 className="text-sm font-semibold text-amber-800 dark:text-amber-300">Warnings</h4>
-                                  </div>
-                                  <div className="space-y-2">
-                                    {section.warning.map((item, i) => (
-                                      <div key={i} className="flex items-center gap-3">
-                                        <div className="flex items-center justify-center w-5 h-5 bg-amber-600 text-white text-xs font-bold rounded-full flex-shrink-0">
-                                          {i + 1}
-                                        </div>
-                                        <div className="flex-1 rounded-md border bg-muted/40 px-3 py-2 text-sm">
-                                          {item}
-                                        </div>
-                                      </div>
-                                    ))}
+                                  <Badge className="mb-2 bg-amber-600 hover:bg-amber-600 text-white text-xs">Warnings</Badge>
+                                  <div className="rounded-md border overflow-hidden">
+                                    <Table>
+                                      <TableBody>
+                                        {section.warning.map((item, i) => (
+                                          <TableRow key={i}>
+                                            <TableCell className="w-10 text-center align-middle font-bold text-amber-700 dark:text-amber-400 tabular-nums">
+                                              {i + 1}
+                                            </TableCell>
+                                            <TableCell className="align-middle text-sm">{item}</TableCell>
+                                          </TableRow>
+                                        ))}
+                                      </TableBody>
+                                    </Table>
                                   </div>
                                 </div>
                               )}
 
                               {errorCount === 0 && warningCount === 0 && (
-                                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                                  <CheckCircle className="h-4 w-4 text-green-700 dark:text-green-400" />
-                                  No errors or warnings.
-                                </div>
+                                <div className="text-sm text-muted-foreground">No errors or warnings.</div>
                               )}
                             </div>
 
@@ -1224,28 +1219,24 @@ export default function ChangeLookupPage() {
                             <div className="lg:border-l lg:pl-6">
                               {actionCount > 0 ? (
                                 <div>
-                                  <div className="flex items-center gap-2 mb-2">
-                                    <AlertCircle className="h-4 w-4 text-primary" />
-                                    <h4 className="text-sm font-semibold">Action Items</h4>
-                                  </div>
-                                  <div className="space-y-2">
-                                    {section.action_items.map((item, i) => (
-                                      <div key={i} className="flex items-center gap-3">
-                                        <div className="flex items-center justify-center w-5 h-5 bg-primary text-primary-foreground text-xs font-bold rounded-full flex-shrink-0">
-                                          {i + 1}
-                                        </div>
-                                        <div className="flex-1 rounded-md border bg-muted/40 px-3 py-2 text-sm">
-                                          {item}
-                                        </div>
-                                      </div>
-                                    ))}
+                                  <Badge className="mb-2 text-xs">Action Items</Badge>
+                                  <div className="rounded-md border overflow-hidden">
+                                    <Table>
+                                      <TableBody>
+                                        {section.action_items.map((item, i) => (
+                                          <TableRow key={i}>
+                                            <TableCell className="w-10 text-center align-middle font-bold text-primary tabular-nums">
+                                              {i + 1}
+                                            </TableCell>
+                                            <TableCell className="align-middle text-sm">{item}</TableCell>
+                                          </TableRow>
+                                        ))}
+                                      </TableBody>
+                                    </Table>
                                   </div>
                                 </div>
                               ) : (
-                                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                                  <CheckCircle className="h-4 w-4 text-green-700 dark:text-green-400" />
-                                  No action items required.
-                                </div>
+                                <div className="text-sm text-muted-foreground">No action items required.</div>
                               )}
                             </div>
                           </div>
