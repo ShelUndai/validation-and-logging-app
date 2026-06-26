@@ -1140,13 +1140,6 @@ export default function ChangeLookupPage() {
                         <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200" />
                         <div className="flex flex-1 flex-wrap items-center justify-between gap-3 pr-2">
                           <div className="flex items-center gap-2 text-left">
-                            {sectionStatus === "pass" ? (
-                              <CheckCircle className="h-4 w-4 text-green-700 dark:text-green-400 flex-shrink-0" />
-                            ) : sectionStatus === "warn" ? (
-                              <AlertTriangle className="h-4 w-4 text-amber-700 dark:text-amber-400 flex-shrink-0" />
-                            ) : (
-                              <XCircle className="h-4 w-4 text-red-700 dark:text-red-400 flex-shrink-0" />
-                            )}
                             <span className="font-medium text-sm">{humanizeSectionKey(key)}</span>
                           </div>
                           <div className="flex items-center gap-1.5">
@@ -1185,11 +1178,13 @@ export default function ChangeLookupPage() {
                                   </div>
                                   <div className="space-y-2">
                                     {section.error.map((item, i) => (
-                                      <div
-                                        key={i}
-                                        className="rounded-md border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-900 dark:border-red-900 dark:bg-red-950/40 dark:text-red-100"
-                                      >
-                                        {item}
+                                      <div key={i} className="flex items-center gap-3">
+                                        <div className="flex items-center justify-center w-5 h-5 bg-red-600 text-white text-xs font-bold rounded-full flex-shrink-0">
+                                          {i + 1}
+                                        </div>
+                                        <div className="flex-1 rounded-md border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-900 dark:border-red-900 dark:bg-red-950/40 dark:text-red-100">
+                                          {item}
+                                        </div>
                                       </div>
                                     ))}
                                   </div>
@@ -1204,11 +1199,13 @@ export default function ChangeLookupPage() {
                                   </div>
                                   <div className="space-y-2">
                                     {section.warning.map((item, i) => (
-                                      <div
-                                        key={i}
-                                        className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-100"
-                                      >
-                                        {item}
+                                      <div key={i} className="flex items-center gap-3">
+                                        <div className="flex items-center justify-center w-5 h-5 bg-amber-600 text-white text-xs font-bold rounded-full flex-shrink-0">
+                                          {i + 1}
+                                        </div>
+                                        <div className="flex-1 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-100">
+                                          {item}
+                                        </div>
                                       </div>
                                     ))}
                                   </div>
@@ -1233,8 +1230,8 @@ export default function ChangeLookupPage() {
                                   </div>
                                   <div className="space-y-2">
                                     {section.action_items.map((item, i) => (
-                                      <div key={i} className="flex items-start gap-3">
-                                        <div className="flex items-center justify-center w-5 h-5 bg-primary text-primary-foreground text-xs font-bold rounded-full flex-shrink-0 mt-0.5">
+                                      <div key={i} className="flex items-center gap-3">
+                                        <div className="flex items-center justify-center w-5 h-5 bg-primary text-primary-foreground text-xs font-bold rounded-full flex-shrink-0">
                                           {i + 1}
                                         </div>
                                         <div className="flex-1 rounded-md border bg-muted/40 px-3 py-2 text-sm">
