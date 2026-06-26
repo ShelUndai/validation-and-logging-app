@@ -1168,73 +1168,91 @@ export default function ChangeLookupPage() {
                         </div>
                       </AccordionTrigger>
                       <AccordionContent>
-                        <div className="space-y-4 pt-1 pb-2">
-                          {errorCount === 0 && warningCount === 0 && actionCount === 0 && (
-                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                              <CheckCircle className="h-4 w-4 text-green-700 dark:text-green-400" />
-                              No issues found in this section.
-                            </div>
-                          )}
-
-                          {errorCount > 0 && (
-                            <div>
-                              <div className="flex items-center gap-2 mb-2">
-                                <XCircle className="h-4 w-4 text-red-700 dark:text-red-400" />
-                                <h4 className="text-sm font-semibold text-red-800 dark:text-red-300">Errors</h4>
-                              </div>
-                              <div className="space-y-2">
-                                {section.error.map((item, i) => (
-                                  <div
-                                    key={i}
-                                    className="rounded-md border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-900 dark:border-red-900 dark:bg-red-950/40 dark:text-red-100"
-                                  >
-                                    {item}
+                        {errorCount === 0 && warningCount === 0 && actionCount === 0 ? (
+                          <div className="flex items-center gap-2 text-sm text-muted-foreground pt-1 pb-2">
+                            <CheckCircle className="h-4 w-4 text-green-700 dark:text-green-400" />
+                            No issues found in this section.
+                          </div>
+                        ) : (
+                          <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-6 gap-y-4 pt-1 pb-2">
+                            {/* Left column: errors + warnings */}
+                            <div className="space-y-4">
+                              {errorCount > 0 && (
+                                <div>
+                                  <div className="flex items-center gap-2 mb-2">
+                                    <XCircle className="h-4 w-4 text-red-700 dark:text-red-400" />
+                                    <h4 className="text-sm font-semibold text-red-800 dark:text-red-300">Errors</h4>
                                   </div>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-
-                          {warningCount > 0 && (
-                            <div>
-                              <div className="flex items-center gap-2 mb-2">
-                                <AlertTriangle className="h-4 w-4 text-amber-700 dark:text-amber-400" />
-                                <h4 className="text-sm font-semibold text-amber-800 dark:text-amber-300">Warnings</h4>
-                              </div>
-                              <div className="space-y-2">
-                                {section.warning.map((item, i) => (
-                                  <div
-                                    key={i}
-                                    className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-100"
-                                  >
-                                    {item}
+                                  <div className="space-y-2">
+                                    {section.error.map((item, i) => (
+                                      <div
+                                        key={i}
+                                        className="rounded-md border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-900 dark:border-red-900 dark:bg-red-950/40 dark:text-red-100"
+                                      >
+                                        {item}
+                                      </div>
+                                    ))}
                                   </div>
-                                ))}
-                              </div>
-                            </div>
-                          )}
+                                </div>
+                              )}
 
-                          {actionCount > 0 && (
-                            <div>
-                              <div className="flex items-center gap-2 mb-2">
-                                <AlertCircle className="h-4 w-4 text-primary" />
-                                <h4 className="text-sm font-semibold">Action Items</h4>
-                              </div>
-                              <div className="space-y-2">
-                                {section.action_items.map((item, i) => (
-                                  <div key={i} className="flex items-start gap-3">
-                                    <div className="flex items-center justify-center w-5 h-5 bg-primary text-primary-foreground text-xs font-bold rounded-full flex-shrink-0 mt-0.5">
-                                      {i + 1}
-                                    </div>
-                                    <div className="flex-1 rounded-md border bg-muted/40 px-3 py-2 text-sm">
-                                      {item}
-                                    </div>
+                              {warningCount > 0 && (
+                                <div>
+                                  <div className="flex items-center gap-2 mb-2">
+                                    <AlertTriangle className="h-4 w-4 text-amber-700 dark:text-amber-400" />
+                                    <h4 className="text-sm font-semibold text-amber-800 dark:text-amber-300">Warnings</h4>
                                   </div>
-                                ))}
-                              </div>
+                                  <div className="space-y-2">
+                                    {section.warning.map((item, i) => (
+                                      <div
+                                        key={i}
+                                        className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-100"
+                                      >
+                                        {item}
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+
+                              {errorCount === 0 && warningCount === 0 && (
+                                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                  <CheckCircle className="h-4 w-4 text-green-700 dark:text-green-400" />
+                                  No errors or warnings.
+                                </div>
+                              )}
                             </div>
-                          )}
-                        </div>
+
+                            {/* Right column: action items */}
+                            <div className="lg:border-l lg:pl-6">
+                              {actionCount > 0 ? (
+                                <div>
+                                  <div className="flex items-center gap-2 mb-2">
+                                    <AlertCircle className="h-4 w-4 text-primary" />
+                                    <h4 className="text-sm font-semibold">Action Items</h4>
+                                  </div>
+                                  <div className="space-y-2">
+                                    {section.action_items.map((item, i) => (
+                                      <div key={i} className="flex items-start gap-3">
+                                        <div className="flex items-center justify-center w-5 h-5 bg-primary text-primary-foreground text-xs font-bold rounded-full flex-shrink-0 mt-0.5">
+                                          {i + 1}
+                                        </div>
+                                        <div className="flex-1 rounded-md border bg-muted/40 px-3 py-2 text-sm">
+                                          {item}
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                  <CheckCircle className="h-4 w-4 text-green-700 dark:text-green-400" />
+                                  No action items required.
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )}
                       </AccordionContent>
                     </AccordionItem>
                   )
