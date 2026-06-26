@@ -34,6 +34,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -51,6 +52,36 @@ interface ValidationResult {
   message: string
   details?: string
   required: boolean
+}
+
+// Systematized per-section validation output
+interface ValidationSection {
+  info: string[]
+  warning: string[]
+  action_items: string[]
+  error: string[]
+  not_applicable: string[]
+}
+
+type ValidationSections = Record<string, ValidationSection>
+
+// Human-readable display names for known section keys
+const SECTION_DISPLAY_NAMES: Record<string, string> = {
+  ctasks: "Change Tasks (CTasks)",
+  mtsa: "Manual Test Strategy & Approach (MTSA)",
+  cr_fields_check: "CR Fields Check",
+  tsr: "Test Strategy Repository (TSR)",
+  tsa: "Test Strategy & Approach (TSA)",
+  attachments: "Attachments",
+  callbacks: "Callbacks",
+}
+
+const humanizeSectionKey = (key: string): string => {
+  if (SECTION_DISPLAY_NAMES[key]) return SECTION_DISPLAY_NAMES[key]
+  return key
+    .split(/[_\s]+/)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ")
 }
 
 interface ValidationLog {
@@ -101,6 +132,7 @@ interface ChangeValidation {
     end_date: string
   }
   validation_results: ValidationResult[]
+  validation_logs: ValidationSections
   summary: {
     total_checks: number
     passed: number
@@ -355,6 +387,40 @@ Failed: 0
         end_date: "2025-01-20T11:00:00Z",
       },
       validation_results: [],
+      validation_logs: {
+        ctasks: {
+          info: [
+            "CTask CTASK0045511 found and linked to parent CR",
+            "All CTasks in valid state for implementation",
+            "Peer reviewer assigned and confirmed",
+          ],
+          warning: [],
+          action_items: [],
+          error: [],
+          not_applicable: [],
+        },
+        mtsa: {
+          info: [
+            "MTSA file found: 'Manual Test Strategy and Approach 25.07.01.xlsx'",
+            "MTSA file data and answers reviewed successfully",
+          ],
+          warning: [],
+          action_items: [],
+          error: [],
+          not_applicable: [],
+        },
+        cr_fields_check: {
+          info: [
+            "CI Field Check Passed: All required fields completed",
+            "CI Start Time Valid: 2025/01/20 09:00",
+            "Validation Plan found and validated",
+          ],
+          warning: [],
+          action_items: [],
+          error: [],
+          not_applicable: [],
+        },
+      },
       summary: {
         total_checks: 17,
         passed: 17,
@@ -433,6 +499,46 @@ Failed: 6
         end_date: "2025-01-15T04:00:00Z",
       },
       validation_results: [],
+      validation_logs: {
+        ctasks: {
+          info: ["CTask CTASK0045511 found and linked to parent CR", "Peer reviewer found"],
+          warning: ["Test filename 'Test Workbook 25.07.01.xlsx' does not contain CSO mnemonic"],
+          action_items: ["Rename the test workbook to include the CSO mnemonic"],
+          error: [],
+          not_applicable: [],
+        },
+        mtsa: {
+          info: [],
+          warning: [
+            "Auto TSR: Data is missing for all columns, manual review required for Test Sets",
+            "Auto TSR: Data is missing for certain columns (Component, Description, Values, Environment)",
+          ],
+          action_items: [
+            "Upload a valid MTSA file before requesting approval",
+            "Review and complete MTSA file data and answers",
+          ],
+          error: [
+            "MTSA Required & Upload Found: Satisfied = False",
+            "Review MTSA File Data/Answers: Satisfied = False",
+          ],
+          not_applicable: [],
+        },
+        cr_fields_check: {
+          info: ["Validation Plan Regex Parsing attempted - checking for Validation Plan file"],
+          warning: ["CI Start Time Already Passed: 2024/07/19 09:00"],
+          action_items: [
+            "Answer all template questions in the CR form",
+            "Update the CR start time to a valid future date",
+            "Provide the post-implementation validation details in the required field",
+          ],
+          error: [
+            "CI Field Check Failed: 'What will the post-implementation validation prove?' is incomplete",
+            "All Template Questions Answered: Satisfied = False",
+            "Valid Start Date / Lead Time: Satisfied = False",
+          ],
+          not_applicable: [],
+        },
+      },
       summary: {
         total_checks: 14,
         passed: 8,
@@ -974,133 +1080,171 @@ export default function ChangeLookupPage() {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 flex-1 overflow-hidden">
-              <Card className="flex flex-col overflow-hidden">
-                <CardHeader className="pb-3 flex-shrink-0">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <CardTitle className="text-base">Validation Output</CardTitle>
-                      <CardDescription className="text-sm">Automation script execution results</CardDescription>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <div className="flex flex-col gap-1 text-left items-start">
-                        <div className="text-xs font-medium text-muted-foreground">Overall Score</div>
-                        <div className="flex items-center gap-2">
-                          <div className="w-16">
-                            <Progress value={validationResult.overall_score} className="h-1.5" />
-                          </div>
-                          <div className="text-sm font-bold min-w-[3rem]">{validationResult.overall_score}%</div>
+            {/* Overall Score summary */}
+            <Card className="flex-shrink-0">
+              <CardContent className="py-4">
+                <div className="flex flex-wrap items-center justify-between gap-4">
+                  <div>
+                    <CardTitle className="text-base">Validation Output</CardTitle>
+                    <CardDescription className="text-sm">
+                      Automation results grouped by section
+                    </CardDescription>
+                  </div>
+                  <div className="flex items-center gap-4">
+                    <div className="flex flex-col gap-1 items-start">
+                      <div className="text-xs font-medium text-muted-foreground">Overall Score</div>
+                      <div className="flex items-center gap-2">
+                        <div className="w-24">
+                          <Progress value={validationResult.overall_score} className="h-1.5" />
                         </div>
-                      </div>
-                      <div className="flex flex-col items-center gap-0.5">
-                        {validationResult.validation_status === "pass" ? (
-                          <Badge className="bg-green-500 hover:bg-green-600 text-xs px-2 py-0.5">
-                            <Check className="w-2.5 h-2.5 mr-1" /> Ready
-                          </Badge>
-                        ) : validationResult.validation_status === "warn" ? (
-                          <Badge className="bg-yellow-500 hover:bg-yellow-600 text-xs px-2 py-0.5">
-                            <AlertTriangle className="w-2.5 h-2.5 mr-1" /> Caution
-                          </Badge>
-                        ) : (
-                          <Badge className="bg-red-500 hover:bg-red-600 text-xs px-2 py-0.5">
-                            <X className="w-2.5 h-2.5 mr-1" /> Not Ready
-                          </Badge>
-                        )}
-                        <div className="text-xs text-muted-foreground">
-                          {validationResult.summary.passed}/{validationResult.summary.total_checks} passed
-                        </div>
+                        <div className="text-sm font-bold min-w-[3rem]">{validationResult.overall_score}%</div>
                       </div>
                     </div>
-                  </div>
-                </CardHeader>
-                <CardContent className="flex-1 overflow-hidden">
-                  <div className="bg-gray-900 text-gray-100 p-4 rounded-lg font-mono text-sm h-full overflow-auto">
-                    <pre className="whitespace-pre-wrap">
-                      {validationResult.script_output.split("\n").map((line, index) => {
-                        const lineNumber = index + 1
-                        let lineClass = "text-gray-100"
-
-                        if (line.startsWith("INFO:")) {
-                          lineClass = "text-blue-400"
-                        } else if (line.startsWith("WARNING:")) {
-                          lineClass = "text-yellow-400"
-                        } else if (line.startsWith("ERROR:")) {
-                          lineClass = "text-red-400"
-                        } else if (line.includes("Satisfied: True")) {
-                          lineClass = "text-green-400"
-                        } else if (line.includes("Satisfied: False")) {
-                          lineClass = "text-red-400"
-                        } else if (line.includes("Passed:") || line.includes("Failed:")) {
-                          lineClass = "text-white font-semibold"
-                        }
-
-                        return (
-                          <div key={index} className="flex">
-                            <span className="text-gray-500 select-none w-8 text-right mr-4 flex-shrink-0">
-                              {lineNumber}
-                            </span>
-                            <span className={lineClass}>{line}</span>
-                          </div>
-                        )
-                      })}
-                    </pre>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <div className="flex flex-col gap-4 overflow-hidden">
-                <div className="flex-1 flex flex-col overflow-hidden">
-                  <div className="pb-3 flex-shrink-0">
-                    <div className="flex items-center gap-2 mb-1">
+                    <div className="flex flex-col items-center gap-0.5">
                       {validationResult.validation_status === "pass" ? (
-                        <>
-                          <CheckCircle className="h-4 w-4 text-green-500" />
-                          <h3 className="text-base font-semibold">Ready for Approval</h3>
-                        </>
+                        <Badge className="bg-green-500 hover:bg-green-600 text-xs px-2 py-0.5">
+                          <Check className="w-2.5 h-2.5 mr-1" /> Ready
+                        </Badge>
+                      ) : validationResult.validation_status === "warn" ? (
+                        <Badge className="bg-yellow-500 hover:bg-yellow-600 text-xs px-2 py-0.5">
+                          <AlertTriangle className="w-2.5 h-2.5 mr-1" /> Caution
+                        </Badge>
                       ) : (
-                        <>
-                          <AlertTriangle className="h-4 w-4 text-amber-500" />
-                          <h3 className="text-base font-semibold">Next Steps & Action Items</h3>
-                        </>
+                        <Badge className="bg-red-500 hover:bg-red-600 text-xs px-2 py-0.5">
+                          <X className="w-2.5 h-2.5 mr-1" /> Not Ready
+                        </Badge>
                       )}
-                    </div>
-                    <p className="text-sm text-muted-foreground">
-                      {validationResult.validation_status === "pass"
-                        ? "All validation checks passed - ready to proceed"
-                        : "Complete these items to improve validation score"}
-                    </p>
-                  </div>
-                  <div className="flex-1 overflow-hidden">
-                    <div className="space-y-3 h-full overflow-y-auto">
-                      {validationResult.approval_actions.map((action, index) => (
-                        <div key={index} className="flex items-start gap-3">
-                          <div className="flex items-center justify-center w-6 h-6 bg-green-500 text-white text-xs font-bold rounded-full flex-shrink-0">
-                            {index + 1}
-                          </div>
-                          <Card className="flex-1">
-                            <CardContent className="p-3">
-                              <span className="text-sm font-medium text-green-700 dark:text-green-300">{action}</span>
-                            </CardContent>
-                          </Card>
-                        </div>
-                      ))}
-
-                      {validationResult.failed_requirements.map((requirement, index) => (
-                        <div key={index} className="flex items-start gap-3">
-                          <div className="flex items-center justify-center w-6 h-6 bg-amber-500 text-white text-xs font-bold rounded-full flex-shrink-0">
-                            {index + 1}
-                          </div>
-                          <Card className="flex-1">
-                            <CardContent className="p-3">
-                              <span className="text-sm font-medium">{requirement}</span>
-                            </CardContent>
-                          </Card>
-                        </div>
-                      ))}
+                      <div className="text-xs text-muted-foreground">
+                        {validationResult.summary.passed}/{validationResult.summary.total_checks} passed
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
+              </CardContent>
+            </Card>
+
+            {/* Per-section accordions */}
+            <div className="flex-1 overflow-y-auto pr-1">
+              <Accordion type="multiple" className="space-y-2">
+                {Object.entries(validationResult.validation_logs).map(([key, section]) => {
+                  const errorCount = section.error.length
+                  const warningCount = section.warning.length
+                  const actionCount = section.action_items.length
+                  const sectionStatus = errorCount > 0 ? "error" : warningCount > 0 ? "warn" : "pass"
+
+                  return (
+                    <AccordionItem key={key} value={key} className="border rounded-lg bg-card px-4">
+                      <AccordionTrigger className="hover:no-underline py-3">
+                        <div className="flex flex-1 flex-wrap items-center justify-between gap-3 pr-2">
+                          <div className="flex items-center gap-2 text-left">
+                            {sectionStatus === "pass" ? (
+                              <CheckCircle className="h-4 w-4 text-green-500 flex-shrink-0" />
+                            ) : sectionStatus === "warn" ? (
+                              <AlertTriangle className="h-4 w-4 text-yellow-500 flex-shrink-0" />
+                            ) : (
+                              <XCircle className="h-4 w-4 text-red-500 flex-shrink-0" />
+                            )}
+                            <span className="font-medium text-sm">{humanizeSectionKey(key)}</span>
+                          </div>
+                          <div className="flex items-center gap-1.5">
+                            {sectionStatus === "pass" ? (
+                              <Badge className="bg-green-100 text-green-800 hover:bg-green-100 text-xs">Passed</Badge>
+                            ) : sectionStatus === "warn" ? (
+                              <Badge className="bg-yellow-100 text-yellow-800 hover:bg-yellow-100 text-xs">Warnings</Badge>
+                            ) : (
+                              <Badge className="bg-red-100 text-red-800 hover:bg-red-100 text-xs">Errors</Badge>
+                            )}
+                            {errorCount > 0 && (
+                              <Badge variant="outline" className="text-xs border-red-200 text-red-700">
+                                {errorCount} error{errorCount !== 1 ? "s" : ""}
+                              </Badge>
+                            )}
+                            {warningCount > 0 && (
+                              <Badge variant="outline" className="text-xs border-yellow-200 text-yellow-700">
+                                {warningCount} warning{warningCount !== 1 ? "s" : ""}
+                              </Badge>
+                            )}
+                            {actionCount > 0 && (
+                              <Badge variant="outline" className="text-xs">
+                                {actionCount} action item{actionCount !== 1 ? "s" : ""}
+                              </Badge>
+                            )}
+                          </div>
+                        </div>
+                      </AccordionTrigger>
+                      <AccordionContent>
+                        <div className="space-y-4 pt-1 pb-2">
+                          {errorCount === 0 && warningCount === 0 && actionCount === 0 && (
+                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                              <CheckCircle className="h-4 w-4 text-green-500" />
+                              No issues found in this section.
+                            </div>
+                          )}
+
+                          {errorCount > 0 && (
+                            <div>
+                              <div className="flex items-center gap-2 mb-2">
+                                <XCircle className="h-4 w-4 text-red-500" />
+                                <h4 className="text-sm font-semibold text-red-700">Errors</h4>
+                              </div>
+                              <div className="space-y-2">
+                                {section.error.map((item, i) => (
+                                  <div
+                                    key={i}
+                                    className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-900"
+                                  >
+                                    {item}
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {warningCount > 0 && (
+                            <div>
+                              <div className="flex items-center gap-2 mb-2">
+                                <AlertTriangle className="h-4 w-4 text-yellow-500" />
+                                <h4 className="text-sm font-semibold text-yellow-700">Warnings</h4>
+                              </div>
+                              <div className="space-y-2">
+                                {section.warning.map((item, i) => (
+                                  <div
+                                    key={i}
+                                    className="rounded-md border border-yellow-200 bg-yellow-50 px-3 py-2 text-sm text-yellow-900"
+                                  >
+                                    {item}
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {actionCount > 0 && (
+                            <div>
+                              <div className="flex items-center gap-2 mb-2">
+                                <AlertCircle className="h-4 w-4 text-primary" />
+                                <h4 className="text-sm font-semibold">Action Items</h4>
+                              </div>
+                              <div className="space-y-2">
+                                {section.action_items.map((item, i) => (
+                                  <div key={i} className="flex items-start gap-3">
+                                    <div className="flex items-center justify-center w-5 h-5 bg-primary text-primary-foreground text-xs font-bold rounded-full flex-shrink-0 mt-0.5">
+                                      {i + 1}
+                                    </div>
+                                    <div className="flex-1 rounded-md border bg-muted/40 px-3 py-2 text-sm">
+                                      {item}
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </AccordionContent>
+                    </AccordionItem>
+                  )
+                })}
+              </Accordion>
             </div>
 
             <Card className="flex-shrink-0">
