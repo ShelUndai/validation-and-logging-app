@@ -1138,29 +1138,29 @@ export default function ChangeLookupPage() {
                         <div className="flex flex-1 flex-wrap items-center justify-between gap-3 pr-2">
                           <div className="flex items-center gap-2 text-left">
                             {sectionStatus === "pass" ? (
-                              <CheckCircle className="h-4 w-4 text-green-500 flex-shrink-0" />
+                              <CheckCircle className="h-4 w-4 text-green-700 dark:text-green-400 flex-shrink-0" />
                             ) : sectionStatus === "warn" ? (
-                              <AlertTriangle className="h-4 w-4 text-yellow-500 flex-shrink-0" />
+                              <AlertTriangle className="h-4 w-4 text-amber-700 dark:text-amber-400 flex-shrink-0" />
                             ) : (
-                              <XCircle className="h-4 w-4 text-red-500 flex-shrink-0" />
+                              <XCircle className="h-4 w-4 text-red-700 dark:text-red-400 flex-shrink-0" />
                             )}
                             <span className="font-medium text-sm">{humanizeSectionKey(key)}</span>
                           </div>
                           <div className="flex items-center gap-1.5">
                             {sectionStatus === "pass" ? (
-                              <Badge className="bg-green-100 text-green-800 hover:bg-green-100 text-xs">Passed</Badge>
+                              <Badge className="bg-green-100 text-green-900 hover:bg-green-100 dark:bg-green-950 dark:text-green-200 text-xs">Passed</Badge>
                             ) : sectionStatus === "warn" ? (
-                              <Badge className="bg-yellow-100 text-yellow-800 hover:bg-yellow-100 text-xs">Warnings</Badge>
+                              <Badge className="bg-amber-100 text-amber-900 hover:bg-amber-100 dark:bg-amber-950 dark:text-amber-200 text-xs">Warnings</Badge>
                             ) : (
-                              <Badge className="bg-red-100 text-red-800 hover:bg-red-100 text-xs">Errors</Badge>
+                              <Badge className="bg-red-100 text-red-900 hover:bg-red-100 dark:bg-red-950 dark:text-red-200 text-xs">Errors</Badge>
                             )}
                             {errorCount > 0 && (
-                              <Badge variant="outline" className="text-xs border-red-200 text-red-700">
+                              <Badge variant="outline" className="text-xs border-red-300 text-red-800 dark:border-red-800 dark:text-red-300">
                                 {errorCount} error{errorCount !== 1 ? "s" : ""}
                               </Badge>
                             )}
                             {warningCount > 0 && (
-                              <Badge variant="outline" className="text-xs border-yellow-200 text-yellow-700">
+                              <Badge variant="outline" className="text-xs border-amber-300 text-amber-800 dark:border-amber-800 dark:text-amber-300">
                                 {warningCount} warning{warningCount !== 1 ? "s" : ""}
                               </Badge>
                             )}
@@ -1176,7 +1176,7 @@ export default function ChangeLookupPage() {
                         <div className="space-y-4 pt-1 pb-2">
                           {errorCount === 0 && warningCount === 0 && actionCount === 0 && (
                             <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                              <CheckCircle className="h-4 w-4 text-green-500" />
+                              <CheckCircle className="h-4 w-4 text-green-700 dark:text-green-400" />
                               No issues found in this section.
                             </div>
                           )}
@@ -1184,14 +1184,14 @@ export default function ChangeLookupPage() {
                           {errorCount > 0 && (
                             <div>
                               <div className="flex items-center gap-2 mb-2">
-                                <XCircle className="h-4 w-4 text-red-500" />
-                                <h4 className="text-sm font-semibold text-red-700">Errors</h4>
+                                <XCircle className="h-4 w-4 text-red-700 dark:text-red-400" />
+                                <h4 className="text-sm font-semibold text-red-800 dark:text-red-300">Errors</h4>
                               </div>
                               <div className="space-y-2">
                                 {section.error.map((item, i) => (
                                   <div
                                     key={i}
-                                    className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-900"
+                                    className="rounded-md border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-900 dark:border-red-900 dark:bg-red-950/40 dark:text-red-100"
                                   >
                                     {item}
                                   </div>
@@ -1203,14 +1203,14 @@ export default function ChangeLookupPage() {
                           {warningCount > 0 && (
                             <div>
                               <div className="flex items-center gap-2 mb-2">
-                                <AlertTriangle className="h-4 w-4 text-yellow-500" />
-                                <h4 className="text-sm font-semibold text-yellow-700">Warnings</h4>
+                                <AlertTriangle className="h-4 w-4 text-amber-700 dark:text-amber-400" />
+                                <h4 className="text-sm font-semibold text-amber-800 dark:text-amber-300">Warnings</h4>
                               </div>
                               <div className="space-y-2">
                                 {section.warning.map((item, i) => (
                                   <div
                                     key={i}
-                                    className="rounded-md border border-yellow-200 bg-yellow-50 px-3 py-2 text-sm text-yellow-900"
+                                    className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-100"
                                   >
                                     {item}
                                   </div>
