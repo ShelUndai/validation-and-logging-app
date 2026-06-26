@@ -1136,7 +1136,8 @@ export default function ChangeLookupPage() {
 
                   return (
                     <AccordionItem key={key} value={key} className="border rounded-lg bg-card px-4">
-                      <AccordionTrigger className="hover:no-underline py-3">
+                      <AccordionTrigger className="hover:no-underline py-3 gap-3 [&>svg:last-of-type]:hidden">
+                        <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200" />
                         <div className="flex flex-1 flex-wrap items-center justify-between gap-3 pr-2">
                           <div className="flex items-center gap-2 text-left">
                             {sectionStatus === "pass" ? (
