@@ -199,6 +199,9 @@ export interface ValidationOutputProps {
   overallStatus: "pass" | "fail" | "warn"
   totalPassed: number
   totalChecks: number
+  title?: string
+  description?: string
+  actions?: React.ReactNode
 }
 
 export function ValidationOutput({
@@ -208,6 +211,9 @@ export function ValidationOutput({
   overallStatus,
   totalPassed,
   totalChecks,
+  title = "Validation Output",
+  description = "Automation script execution results",
+  actions,
 }: ValidationOutputProps) {
   const views = Object.entries(sections).map(([key, section]) =>
     buildSectionView(key, humanizeSectionKey(key), section),
@@ -225,11 +231,11 @@ export function ValidationOutput({
   return (
     <Card>
       <CardHeader className="flex flex-row flex-wrap items-start justify-between gap-4 space-y-0 pb-4">
-        <div className="space-y-1">
-          <CardTitle className="text-base">Validation Output</CardTitle>
-          <CardDescription>Automation script execution results</CardDescription>
+        <div className="space-y-1 min-w-0">
+          <CardTitle className="text-base">{title}</CardTitle>
+          <CardDescription className="text-pretty">{description}</CardDescription>
         </div>
-        <div className="flex items-center gap-4">
+        <div className="flex flex-wrap items-center gap-4">
           <div className="flex flex-col gap-1 items-end">
             <p className="text-xs font-medium text-muted-foreground">Overall Score</p>
             <div className="flex items-center gap-2">
@@ -243,6 +249,9 @@ export function ValidationOutput({
             </p>
           </div>
           <ReadyBadge status={overallBadgeStatus} />
+          {actions && (
+            <div className="flex items-center gap-2 border-l pl-4">{actions}</div>
+          )}
         </div>
       </CardHeader>
       <CardContent>

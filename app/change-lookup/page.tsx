@@ -1122,36 +1122,8 @@ export default function ChangeLookupPage() {
         </Card>
 
         {validationResult && (
-          <div className="grid grid-rows-[auto_1fr_auto] gap-4 h-full overflow-hidden">
-            <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
-              <div>
-                <h3 className="text-lg font-semibold">Validation Results</h3>
-                <p className="text-sm text-muted-foreground">
-                  {extractShowingResultsLine(validationResult.script_output)}
-                </p>
-              </div>
-              <div className="flex items-start gap-2 md:mt-0 mt-2">
-                <Button 
-                  size="sm" 
-                  variant="outline"
-                  onClick={() => {
-                    setHistorySearchQuery(validationResult.change_number)
-                    setHistorySubmittedQuery(validationResult.change_number)
-                    fetchHistory(validationResult.change_number)
-                    setActiveTab("history")
-                  }}
-                >
-                  <History className="mr-2 h-4 w-4" />
-                  View History
-                </Button>
-                <Button size="sm" onClick={() => downloadCSV(validationResult)}>
-                  <Download className="mr-2 h-4 w-4" />
-                  Download CSV
-                </Button>
-              </div>
-            </div>
-
-            {/* Validation output: sidebar quick-select + accordion rows in one card */}
+          <div className="grid grid-rows-[1fr_auto] gap-4 h-full overflow-hidden">
+            {/* Validation results: header, sidebar quick-select + accordion rows in one card */}
             <div className="flex-1 overflow-y-auto pr-1">
               <ValidationOutput
                 key={`${validationResult.change_number}-${validationResult.executed_on}`}
@@ -1161,6 +1133,29 @@ export default function ChangeLookupPage() {
                 overallStatus={validationResult.validation_status}
                 totalPassed={validationResult.summary.passed}
                 totalChecks={validationResult.summary.total_checks}
+                title="Validation Results"
+                description={extractShowingResultsLine(validationResult.script_output)}
+                actions={
+                  <>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        setHistorySearchQuery(validationResult.change_number)
+                        setHistorySubmittedQuery(validationResult.change_number)
+                        fetchHistory(validationResult.change_number)
+                        setActiveTab("history")
+                      }}
+                    >
+                      <History className="mr-2 h-4 w-4" />
+                      View History
+                    </Button>
+                    <Button size="sm" onClick={() => downloadCSV(validationResult)}>
+                      <Download className="mr-2 h-4 w-4" />
+                      Download CSV
+                    </Button>
+                  </>
+                }
               />
             </div>
 
