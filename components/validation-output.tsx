@@ -239,9 +239,8 @@ export function ValidationOutput({
   return (
     <Card>
       <CardHeader className="flex flex-row flex-wrap items-start justify-between gap-4 space-y-0 pb-4">
-        <div className="flex-1 min-w-0 basis-64 space-y-1">
-          <CardTitle className="text-base">{title}</CardTitle>
-          <CardDescription className="text-pretty">{description}</CardDescription>
+        <div className="flex-1 min-w-0 basis-64">
+          <CardTitle className="text-2xl font-semibold">{title}</CardTitle>
         </div>
         <div className="flex flex-col items-end gap-3 shrink-0">
           {actions && <div className="flex items-center gap-2">{actions}</div>}
@@ -265,6 +264,9 @@ export function ValidationOutput({
         </div>
       </CardHeader>
       <CardContent>
+        {description && (
+          <CardDescription className="text-pretty mb-3">{description}</CardDescription>
+        )}
         <div className="grid grid-cols-1 md:grid-cols-[260px_1fr] rounded-lg border overflow-hidden">
           {/* Sidebar rail: quick selection */}
           <nav
