@@ -238,35 +238,36 @@ export function ValidationOutput({
 
   return (
     <Card>
-      <CardHeader className="flex flex-row flex-wrap items-start justify-between gap-4 space-y-0 pb-4">
-        <div className="flex-1 min-w-0 basis-64">
+      <CardHeader className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-x-4 gap-y-2 space-y-0 pb-4">
+        {/* Row 1: title | action buttons */}
+        <div className="flex items-center min-w-0">
           <CardTitle className="text-2xl font-semibold">{title}</CardTitle>
         </div>
-        <div className="flex flex-col items-end gap-3 shrink-0">
-          {actions && <div className="flex items-center gap-2">{actions}</div>}
-          <div className="flex items-center gap-3">
-            <div className="flex flex-col items-end gap-1">
-              <div className="flex items-center gap-2">
-                <p className="text-xs font-medium text-muted-foreground">Overall Score</p>
-                <span className="text-sm font-bold tabular-nums">{safeScore}%</span>
-              </div>
-              <div className="w-full">
-                <Progress value={safeScore} className="h-1.5" />
-              </div>
+        <div className="flex items-center justify-end gap-2">{actions}</div>
+
+        {/* Row 2: subtitle | metrics */}
+        <div className="flex items-end min-w-0">
+          {description && <CardDescription className="text-pretty">{description}</CardDescription>}
+        </div>
+        <div className="flex items-end justify-end gap-3">
+          <div className="flex flex-col items-end gap-1">
+            <div className="flex items-center gap-2">
+              <p className="text-xs font-medium text-muted-foreground">Overall Score</p>
+              <span className="text-sm font-bold tabular-nums">{safeScore}%</span>
             </div>
-            <div className="flex flex-col items-center gap-1 border-l pl-3">
-              <ReadyBadge status={overallBadgeStatus} />
-              <p className="text-xs text-muted-foreground tabular-nums">
-                {totalPassed}/{totalChecks} passed
-              </p>
+            <div className="w-full">
+              <Progress value={safeScore} className="h-1.5" />
             </div>
+          </div>
+          <div className="flex flex-col items-center gap-1 border-l pl-3">
+            <ReadyBadge status={overallBadgeStatus} />
+            <p className="text-xs text-muted-foreground tabular-nums">
+              {totalPassed}/{totalChecks} passed
+            </p>
           </div>
         </div>
       </CardHeader>
       <CardContent>
-        {description && (
-          <CardDescription className="text-pretty mb-3">{description}</CardDescription>
-        )}
         <div className="grid grid-cols-1 md:grid-cols-[260px_1fr] rounded-lg border overflow-hidden">
           {/* Sidebar rail: quick selection */}
           <nav
