@@ -130,12 +130,12 @@ const isReady = (s: SectionData) => !s.findings.some((f) => f.severity === "erro
 
 function ReadyBadge({ ready }: { ready: boolean }) {
   return ready ? (
-    <Badge className="bg-green-600 hover:bg-green-600 text-white gap-1 rounded-full px-2.5">
+    <Badge className="bg-green-600 hover:bg-green-600 text-white gap-1 rounded-full px-2.5 min-w-[96px] justify-center">
       <Check className="h-3 w-3" />
       Ready
     </Badge>
   ) : (
-    <Badge className="bg-red-600 hover:bg-red-600 text-white gap-1 rounded-full px-2.5">
+    <Badge className="bg-red-600 hover:bg-red-600 text-white gap-1 rounded-full px-2.5 min-w-[96px] justify-center">
       <X className="h-3 w-3" />
       Not Ready
     </Badge>
@@ -144,8 +144,8 @@ function ReadyBadge({ ready }: { ready: boolean }) {
 
 function HeaderMeta({ s }: { s: SectionData }) {
   return (
-    <div className="flex items-center gap-3 shrink-0">
-      <span className="text-xs text-muted-foreground tabular-nums whitespace-nowrap">
+    <div className="flex items-center gap-4 shrink-0">
+      <span className="w-20 text-right text-xs text-muted-foreground tabular-nums whitespace-nowrap">
         {s.passed}/{s.total} passed
       </span>
       <ReadyBadge ready={isReady(s)} />
@@ -252,7 +252,7 @@ function ValidationOutput() {
         <div className="grid grid-cols-1 md:grid-cols-[260px_1fr] rounded-lg border overflow-hidden">
           {/* Sidebar rail: quick selection */}
           <nav
-            className="border-b md:border-b-0 md:border-r bg-muted/30 p-1.5 space-y-0.5"
+            className="border-b md:border-b-0 md:border-r bg-muted/30 p-2 space-y-1"
             aria-label="Validation sections"
           >
             {SECTIONS.map((s) => {
@@ -262,7 +262,7 @@ function ValidationOutput() {
                   key={s.name}
                   onClick={() => handleSidebarClick(s.name)}
                   className={cn(
-                    "flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-sm transition-colors",
+                    "flex w-full items-center gap-2 rounded-md px-3 py-2.5 text-left text-sm transition-colors",
                     active ? "bg-background shadow-sm font-medium" : "hover:bg-background/60",
                   )}
                   aria-expanded={active}
@@ -287,7 +287,7 @@ function ValidationOutput() {
           <Accordion type="multiple" value={open} onValueChange={setOpen} className="divide-y min-w-0">
             {SECTIONS.map((s) => (
               <AccordionItem key={s.name} value={s.name} className="border-b-0 px-4">
-                <AccordionTrigger className="hover:no-underline py-3 gap-3 [&>svg:last-of-type]:hidden">
+                <AccordionTrigger className="hover:no-underline py-4 gap-3 [&>svg:last-of-type]:hidden">
                   <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200" />
                   <div className="flex flex-1 items-center justify-between gap-3 pr-1 min-w-0">
                     <span className="font-medium text-sm truncate">{s.name}</span>
