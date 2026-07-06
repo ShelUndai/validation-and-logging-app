@@ -235,23 +235,23 @@ export function ValidationOutput({
           <CardTitle className="text-base">{title}</CardTitle>
           <CardDescription className="text-pretty">{description}</CardDescription>
         </div>
-        <div className="flex flex-wrap items-center gap-4">
-          <div className="flex flex-col gap-1 items-end">
-            <p className="text-xs font-medium text-muted-foreground">Overall Score</p>
-            <div className="flex items-center gap-2">
-              <div className="w-24">
-                <Progress value={overallScore} className="h-1.5" />
+        <div className="flex flex-col items-end gap-3">
+          {actions && <div className="flex items-center gap-2">{actions}</div>}
+          <div className="flex items-center gap-4">
+            <div className="flex flex-col gap-1 items-end">
+              <p className="text-xs font-medium text-muted-foreground">Overall Score</p>
+              <div className="flex items-center gap-2">
+                <div className="w-24">
+                  <Progress value={overallScore} className="h-1.5" />
+                </div>
+                <span className="text-sm font-bold tabular-nums min-w-[3rem]">{overallScore}%</span>
               </div>
-              <span className="text-sm font-bold tabular-nums min-w-[3rem]">{overallScore}%</span>
+              <p className="text-xs text-muted-foreground tabular-nums">
+                {totalPassed}/{totalChecks} passed
+              </p>
             </div>
-            <p className="text-xs text-muted-foreground tabular-nums">
-              {totalPassed}/{totalChecks} passed
-            </p>
+            <ReadyBadge status={overallBadgeStatus} />
           </div>
-          <ReadyBadge status={overallBadgeStatus} />
-          {actions && (
-            <div className="flex items-center gap-2 border-l pl-4">{actions}</div>
-          )}
         </div>
       </CardHeader>
       <CardContent>
