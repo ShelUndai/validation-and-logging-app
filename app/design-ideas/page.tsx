@@ -2,26 +2,16 @@
 
 import { useState } from "react"
 import Link from "next/link"
-import {
-  AlertTriangle,
-  ArrowLeft,
-  Check,
-  ChevronDown,
-  AlertCircle,
-  Minus,
-  Wrench,
-  X,
-} from "lucide-react"
+import { ArrowLeft, Check, ChevronDown, X } from "lucide-react"
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { cn } from "@/lib/utils"
 
 // ---------------------------------------------------------------------------
-// Shared mock data (mirrors the real ValidationSection shape)
+// Mock data (mirrors the real ValidationSection shape)
 // ---------------------------------------------------------------------------
 
 type Severity = "error" | "warning" | "info" | "not_applicable"
@@ -99,6 +89,7 @@ const SECTIONS: SectionData[] = [
         message:
           "Auto TSR: Data is missing for columns: Components, Labels, Environment, Epic Link, Linked Issues. Manual review required for Test Plan",
       },
+      { severity: "info", message: "TSR template version 4.2 detected" },
       { severity: "not_applicable", message: "Automated Control check skipped — no automated controls linked" },
     ],
   },
@@ -126,17 +117,13 @@ const SECTIONS: SectionData[] = [
 // Shared bits
 // ---------------------------------------------------------------------------
 
-const severityIcon = (s: Severity) => {
-  switch (s) {
-    case "error":
-      return <AlertCircle className="h-4 w-4 text-red-600 dark:text-red-400" aria-label="Error" />
-    case "warning":
-      return <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400" aria-label="Warning" />
-    case "not_applicable":
-      return <Minus className="h-4 w-4 text-muted-foreground" aria-label="Not applicable" />
-    default:
-      return <Check className="h-4 w-4 text-green-600 dark:text-green-400" aria-label="Passed" />
-  }
+const SEVERITY_ORDER: Severity[] = ["error", "warning", "info", "not_applicable"]
+
+const SEVERITY_META: Record<Severity, { label: string; className: string }> = {
+  error: { label: "Errors", className: "text-red-600 dark:text-red-400" },
+  warning: { label: "Warnings", className: "text-amber-600 dark:text-amber-400" },
+  info: { label: "Info", className: "text-blue-600 dark:text-blue-400" },
+  not_applicable: { label: "Not Applicable", className: "text-muted-foreground" },
 }
 
 const isReady = (s: SectionData) => !s.findings.some((f) => f.severity === "error")
@@ -166,6 +153,10 @@ function HeaderMeta({ s }: { s: SectionData }) {
   )
 }
 
+// ---------------------------------------------------------------------------
+// Findings grouped by severity with visible group titles (no icons)
+// ---------------------------------------------------------------------------
+
 function FindingsTable({ findings }: { findings: Finding[] }) {
   if (findings.length === 0) {
     return (
@@ -175,25 +166,25 @@ function FindingsTable({ findings }: { findings: Finding[] }) {
       </p>
     )
   }
+
+  const groups = SEVERITY_ORDER.map((sev) => ({
+    severity: sev,
+    items: findings.filter((f) => f.severity === sev),
+  })).filter((g) => g.items.length > 0)
+
   return (
     <div className="rounded-md border overflow-hidden">
       <Table>
         <TableHeader>
           <TableRow className="bg-muted/50 hover:bg-muted/50">
-            <TableHead className="w-10" aria-label="Severity" />
+            <TableHead className="w-10 text-xs text-right pr-0" aria-label="Number" />
             <TableHead className="text-xs">Finding</TableHead>
             <TableHead className="text-xs w-[42%]">How to fix</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
-          {findings.map((f, i) => (
-            <TableRow key={i} className={cn(f.severity === "not_applicable" && "opacity-60")}>
-              <TableCell className="align-top pt-3">{severityIcon(f.severity)}</TableCell>
-              <TableCell className="align-top text-sm leading-relaxed">{f.message}</TableCell>
-              <TableCell className="align-top text-sm leading-relaxed text-muted-foreground">
-                {f.action ?? <span className="text-muted-foreground/50">—</span>}
-              </TableCell>
-            </TableRow>
+          {groups.map((g) => (
+            <SeverityGroupRows key={g.severity} severity={g.severity} items={g.items} />
           ))}
         </TableBody>
       </Table>
@@ -201,7 +192,47 @@ function FindingsTable({ findings }: { findings: Finding[] }) {
   )
 }
 
-function OutputCard({ children }: { children: React.ReactNode }) {
+function SeverityGroupRows({ severity, items }: { severity: Severity; items: Finding[] }) {
+  const meta = SEVERITY_META[severity]
+  const dimmed = severity === "not_applicable"
+  return (
+    <>
+      <TableRow className="bg-muted/30 hover:bg-muted/30">
+        <TableCell colSpan={3} className="py-1.5">
+          <span className={cn("text-xs font-semibold uppercase tracking-wide", meta.className)}>
+            {meta.label}
+            <span className="ml-1.5 font-normal text-muted-foreground normal-case tracking-normal">
+              ({items.length})
+            </span>
+          </span>
+        </TableCell>
+      </TableRow>
+      {items.map((f, i) => (
+        <TableRow key={i} className={cn(dimmed && "opacity-60")}>
+          <TableCell className="align-top text-sm text-muted-foreground tabular-nums text-right pr-0">
+            {i + 1}
+          </TableCell>
+          <TableCell className="align-top text-sm leading-relaxed">{f.message}</TableCell>
+          <TableCell className="align-top text-sm leading-relaxed text-muted-foreground">
+            {f.action ?? <span className="text-muted-foreground/50">—</span>}
+          </TableCell>
+        </TableRow>
+      ))}
+    </>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Final design: sidebar quick-select + full accordion list on the right
+// ---------------------------------------------------------------------------
+
+function ValidationOutput() {
+  const [open, setOpen] = useState<string[]>(["TSR"])
+
+  const handleSidebarClick = (name: string) => {
+    setOpen((prev) => (prev.includes(name) ? [] : [name]))
+  }
+
   return (
     <Card>
       <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-4">
@@ -217,43 +248,24 @@ function OutputCard({ children }: { children: React.ReactNode }) {
           <ReadyBadge ready={false} />
         </div>
       </CardHeader>
-      <CardContent>{children}</CardContent>
-    </Card>
-  )
-}
-
-// ---------------------------------------------------------------------------
-// Idea 1 — Hybrid: sidebar rail + flat table detail, all inside one card
-// ---------------------------------------------------------------------------
-
-function IdeaHybrid() {
-  const [selected, setSelected] = useState("TSR")
-  const section = SECTIONS.find((s) => s.name === selected) ?? SECTIONS[0]
-
-  return (
-    <div className="space-y-4">
-      <p className="text-sm text-muted-foreground text-pretty">
-        A&apos;s table + C&apos;s sidebar, contained in a single Validation Output card. The rail is a permanent
-        overview showing pass counts and the Ready badge for every section at once; the detail pane shows the flat
-        findings table for the selected section. No accordions, nothing floats.
-      </p>
-      <OutputCard>
-        <div className="grid grid-cols-1 md:grid-cols-[280px_1fr] rounded-lg border overflow-hidden">
+      <CardContent>
+        <div className="grid grid-cols-1 md:grid-cols-[260px_1fr] rounded-lg border overflow-hidden">
+          {/* Sidebar rail: quick selection */}
           <nav
             className="border-b md:border-b-0 md:border-r bg-muted/30 p-1.5 space-y-0.5"
             aria-label="Validation sections"
           >
             {SECTIONS.map((s) => {
-              const active = s.name === selected
+              const active = open.includes(s.name)
               return (
                 <button
                   key={s.name}
-                  onClick={() => setSelected(s.name)}
+                  onClick={() => handleSidebarClick(s.name)}
                   className={cn(
                     "flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-sm transition-colors",
                     active ? "bg-background shadow-sm font-medium" : "hover:bg-background/60",
                   )}
-                  aria-current={active ? "true" : undefined}
+                  aria-expanded={active}
                 >
                   <span
                     className={cn(
@@ -270,120 +282,27 @@ function IdeaHybrid() {
               )
             })}
           </nav>
-          <div className="p-4 space-y-3 min-w-0">
-            <div className="flex items-center justify-between gap-3">
-              <h3 className="font-medium text-sm">{section.name}</h3>
-              <HeaderMeta s={section} />
-            </div>
-            <FindingsTable findings={section.findings} />
-          </div>
+
+          {/* Right pane: all sections as accordion rows */}
+          <Accordion type="multiple" value={open} onValueChange={setOpen} className="divide-y min-w-0">
+            {SECTIONS.map((s) => (
+              <AccordionItem key={s.name} value={s.name} className="border-b-0 px-4">
+                <AccordionTrigger className="hover:no-underline py-3 gap-3 [&>svg:last-of-type]:hidden">
+                  <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200" />
+                  <div className="flex flex-1 items-center justify-between gap-3 pr-1 min-w-0">
+                    <span className="font-medium text-sm truncate">{s.name}</span>
+                    <HeaderMeta s={s} />
+                  </div>
+                </AccordionTrigger>
+                <AccordionContent className="pb-4">
+                  <FindingsTable findings={s.findings} />
+                </AccordionContent>
+              </AccordionItem>
+            ))}
+          </Accordion>
         </div>
-      </OutputCard>
-    </div>
-  )
-}
-
-// ---------------------------------------------------------------------------
-// Idea 2 — Carded accordion: A's flat tables as divided rows inside one card
-// ---------------------------------------------------------------------------
-
-function IdeaCardedAccordion() {
-  return (
-    <div className="space-y-4">
-      <p className="text-sm text-muted-foreground text-pretty">
-        Closest to your current layout, but the subsections are divided rows inside the Validation Output card
-        instead of separate floating boxes. Expanding a row reveals the flat findings table. Least change for users
-        already familiar with the current UI.
-      </p>
-      <OutputCard>
-        <Accordion type="multiple" defaultValue={["TSR"]} className="rounded-lg border divide-y">
-          {SECTIONS.map((s) => (
-            <AccordionItem key={s.name} value={s.name} className="border-b-0 px-4">
-              <AccordionTrigger className="hover:no-underline py-3 gap-3 [&>svg:last-of-type]:hidden">
-                <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200" />
-                <div className="flex flex-1 items-center justify-between gap-3 pr-1 min-w-0">
-                  <span className="font-medium text-sm truncate">{s.name}</span>
-                  <HeaderMeta s={s} />
-                </div>
-              </AccordionTrigger>
-              <AccordionContent className="pb-4">
-                <FindingsTable findings={s.findings} />
-              </AccordionContent>
-            </AccordionItem>
-          ))}
-        </Accordion>
-      </OutputCard>
-    </div>
-  )
-}
-
-// ---------------------------------------------------------------------------
-// Idea 3 — Unified triage table: one table, section group rows, no accordions
-// ---------------------------------------------------------------------------
-
-function IdeaTriageTable() {
-  return (
-    <div className="space-y-4">
-      <p className="text-sm text-muted-foreground text-pretty">
-        A new alternative: everything visible at once in a single table. Each section becomes a group-header row
-        carrying the pass count and Ready badge; its findings follow as rows beneath it. Passing sections collapse to
-        just their header row. Fastest for &quot;show me everything wrong with this CR&quot; triage, and trivially
-        maps to the CSV export.
-      </p>
-      <OutputCard>
-        <div className="rounded-lg border overflow-hidden">
-          <Table>
-            <TableHeader>
-              <TableRow className="bg-muted/50 hover:bg-muted/50">
-                <TableHead className="w-10" aria-label="Severity" />
-                <TableHead className="text-xs">Finding</TableHead>
-                <TableHead className="text-xs w-[42%]">How to fix</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {SECTIONS.map((s) => (
-                <SectionGroupRows key={s.name} s={s} />
-              ))}
-            </TableBody>
-          </Table>
-        </div>
-      </OutputCard>
-    </div>
-  )
-}
-
-function SectionGroupRows({ s }: { s: SectionData }) {
-  return (
-    <>
-      <TableRow className="bg-muted/30 hover:bg-muted/30">
-        <TableCell colSpan={3} className="py-2.5">
-          <div className="flex items-center justify-between gap-3">
-            <span className="font-medium text-sm">{s.name}</span>
-            <HeaderMeta s={s} />
-          </div>
-        </TableCell>
-      </TableRow>
-      {s.findings.length === 0 ? (
-        <TableRow>
-          <TableCell colSpan={3} className="py-2.5">
-            <p className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Check className="h-4 w-4 text-green-600 dark:text-green-400" />
-              All checks passed.
-            </p>
-          </TableCell>
-        </TableRow>
-      ) : (
-        s.findings.map((f, i) => (
-          <TableRow key={i} className={cn(f.severity === "not_applicable" && "opacity-60")}>
-            <TableCell className="align-top pt-3">{severityIcon(f.severity)}</TableCell>
-            <TableCell className="align-top text-sm leading-relaxed">{f.message}</TableCell>
-            <TableCell className="align-top text-sm leading-relaxed text-muted-foreground">
-              {f.action ?? <span className="text-muted-foreground/50">—</span>}
-            </TableCell>
-          </TableRow>
-        ))
-      )}
-    </>
+      </CardContent>
+    </Card>
   )
 }
 
@@ -394,7 +313,7 @@ function SectionGroupRows({ s }: { s: SectionData }) {
 export default function DesignIdeasPage() {
   return (
     <main className="min-h-screen bg-background">
-      <div className="mx-auto max-w-5xl px-4 py-8 space-y-6">
+      <div className="mx-auto max-w-6xl px-4 py-8 space-y-6">
         <div className="space-y-2">
           <Button variant="ghost" size="sm" asChild className="-ml-2">
             <Link href="/change-lookup">
@@ -402,30 +321,15 @@ export default function DesignIdeasPage() {
               Back to CR Validator
             </Link>
           </Button>
-          <h1 className="text-2xl font-semibold text-balance">Validation Output — Design Ideas, Round 2</h1>
+          <h1 className="text-2xl font-semibold text-balance">Validation Output — Final Design</h1>
           <p className="text-sm text-muted-foreground max-w-2xl text-pretty">
-            All three variants keep the &quot;n/m passed&quot; count and the Ready / Not Ready badge on each
-            subsection header, wrap everything in a single Validation Output card, and flatten severity into a row
-            attribute (icon) instead of nested Errors / Warnings / N&#47;A groups.
+            Sidebar for quick selection, with every subsection rendered as an accordion row on the right. Clicking a
+            closed sidebar item closes the rest and opens it; clicking the open item closes all. Findings are grouped
+            under visible Errors / Warnings / Info / Not Applicable titles — no icons.
           </p>
         </div>
 
-        <Tabs defaultValue="hybrid">
-          <TabsList>
-            <TabsTrigger value="hybrid">1 · Sidebar + table</TabsTrigger>
-            <TabsTrigger value="carded">2 · Carded accordion</TabsTrigger>
-            <TabsTrigger value="triage">3 · Triage table</TabsTrigger>
-          </TabsList>
-          <TabsContent value="hybrid" className="mt-4">
-            <IdeaHybrid />
-          </TabsContent>
-          <TabsContent value="carded" className="mt-4">
-            <IdeaCardedAccordion />
-          </TabsContent>
-          <TabsContent value="triage" className="mt-4">
-            <IdeaTriageTable />
-          </TabsContent>
-        </Tabs>
+        <ValidationOutput />
       </div>
     </main>
   )
