@@ -145,7 +145,7 @@ function ReadyBadge({ ready }: { ready: boolean }) {
 function HeaderMeta({ s }: { s: SectionData }) {
   return (
     <div className="flex items-center gap-4 shrink-0">
-      <span className="w-20 text-right text-xs text-muted-foreground tabular-nums whitespace-nowrap">
+      <span className="w-20 text-left text-xs text-muted-foreground tabular-nums whitespace-nowrap">
         {s.passed}/{s.total} passed
       </span>
       <ReadyBadge ready={isReady(s)} />
