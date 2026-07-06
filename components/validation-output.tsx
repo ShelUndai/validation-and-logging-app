@@ -243,10 +243,8 @@ export function ValidationOutput({
           <CardTitle className="text-base">{title}</CardTitle>
           <CardDescription className="text-pretty">{description}</CardDescription>
         </div>
-        <div className="flex flex-wrap items-center gap-3">
-          {actions && (
-            <div className="flex items-center gap-2 sm:border-r sm:pr-3">{actions}</div>
-          )}
+        <div className="flex flex-col items-end gap-3 shrink-0">
+          {actions && <div className="flex items-center gap-2">{actions}</div>}
           <div className="flex items-center gap-3">
             <div className="flex flex-col items-end gap-1">
               <div className="flex items-center gap-2">
