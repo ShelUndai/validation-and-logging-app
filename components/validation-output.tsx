@@ -228,6 +228,14 @@ export function ValidationOutput({
 
   const overallBadgeStatus = overallStatus === "pass" ? "ready" : overallStatus === "warn" ? "caution" : "not_ready"
 
+  // Guard against null/undefined/string scores from the backend; fall back to computing from pass counts.
+  const numericScore = Number(overallScore)
+  const safeScore = Number.isFinite(numericScore)
+    ? Math.round(numericScore)
+    : totalChecks > 0
+      ? Math.round((totalPassed / totalChecks) * 100)
+      : 0
+
   return (
     <Card>
       <CardHeader className="flex flex-row flex-wrap items-start justify-between gap-4 space-y-0 pb-4">
@@ -237,20 +245,22 @@ export function ValidationOutput({
         </div>
         <div className="flex flex-col items-end gap-3">
           {actions && <div className="flex items-center gap-2">{actions}</div>}
-          <div className="flex items-center gap-4">
-            <div className="flex flex-col gap-1 items-end">
-              <p className="text-xs font-medium text-muted-foreground">Overall Score</p>
+          <div className="flex items-center gap-3">
+            <div className="flex flex-col items-end gap-1">
               <div className="flex items-center gap-2">
-                <div className="w-24">
-                  <Progress value={overallScore} className="h-1.5" />
-                </div>
-                <span className="text-sm font-bold tabular-nums min-w-[3rem]">{overallScore}%</span>
+                <p className="text-xs font-medium text-muted-foreground">Overall Score</p>
+                <span className="text-sm font-bold tabular-nums">{safeScore}%</span>
               </div>
+              <div className="w-full">
+                <Progress value={safeScore} className="h-1.5" />
+              </div>
+            </div>
+            <div className="flex flex-col items-center gap-1 border-l pl-3">
+              <ReadyBadge status={overallBadgeStatus} />
               <p className="text-xs text-muted-foreground tabular-nums">
                 {totalPassed}/{totalChecks} passed
               </p>
             </div>
-            <ReadyBadge status={overallBadgeStatus} />
           </div>
         </div>
       </CardHeader>
