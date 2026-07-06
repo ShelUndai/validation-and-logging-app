@@ -35,7 +35,6 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -45,6 +44,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { APP_VERSION } from "@/lib/version"
+import { ValidationOutput } from "@/components/validation-output"
 
 interface ValidationResult {
   item: string
@@ -1122,7 +1122,7 @@ export default function ChangeLookupPage() {
         </Card>
 
         {validationResult && (
-          <div className="grid grid-rows-[auto_auto_1fr_auto] gap-4 h-full overflow-hidden">
+          <div className="grid grid-rows-[auto_1fr_auto] gap-4 h-full overflow-hidden">
             <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
               <div>
                 <h3 className="text-lg font-semibold">Validation Results</h3>
@@ -1151,172 +1151,17 @@ export default function ChangeLookupPage() {
               </div>
             </div>
 
-            {/* Overall Score summary */}
-            <Card className="flex-shrink-0">
-              <CardContent className="py-4">
-                <div className="flex flex-wrap items-center justify-between gap-4">
-                  <div>
-                    <CardTitle className="text-base">Validation Output</CardTitle>
-                    <CardDescription className="text-sm">
-                      Automation results grouped by section
-                    </CardDescription>
-                  </div>
-                  <div className="flex items-center gap-4">
-                    <div className="flex flex-col gap-1 items-start">
-                      <div className="text-xs font-medium text-muted-foreground">Overall Score</div>
-                      <div className="flex items-center gap-2">
-                        <div className="w-24">
-                          <Progress value={validationResult.overall_score} className="h-1.5" />
-                        </div>
-                        <div className="text-sm font-bold min-w-[3rem]">{validationResult.overall_score}%</div>
-                      </div>
-                    </div>
-                    <div className="flex flex-col items-center gap-0.5">
-                      {validationResult.validation_status === "pass" ? (
-                        <Badge className="bg-green-500 hover:bg-green-600 text-xs px-2 py-0.5">
-                          <Check className="w-2.5 h-2.5 mr-1" /> Ready
-                        </Badge>
-                      ) : validationResult.validation_status === "warn" ? (
-                        <Badge className="bg-yellow-500 hover:bg-yellow-600 text-xs px-2 py-0.5">
-                          <AlertTriangle className="w-2.5 h-2.5 mr-1" /> Caution
-                        </Badge>
-                      ) : (
-                        <Badge className="bg-red-500 hover:bg-red-600 text-xs px-2 py-0.5">
-                          <X className="w-2.5 h-2.5 mr-1" /> Not Ready
-                        </Badge>
-                      )}
-                      <div className="text-xs text-muted-foreground">
-                        {validationResult.summary.passed}/{validationResult.summary.total_checks} passed
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Per-section accordions */}
+            {/* Validation output: sidebar quick-select + accordion rows in one card */}
             <div className="flex-1 overflow-y-auto pr-1">
-              <Accordion type="multiple" className="space-y-2">
-                {Object.entries(validationResult.validation_logs).map(([key, section]) => {
-                  const errorCount = section.error.length
-                  const warningCount = section.warning.length
-                  const actionCount = section.action_items.length
-                  const passedCount = section.info.length
-                  const sectionTotal = passedCount + warningCount + errorCount
-                  const sectionStatus = errorCount > 0 ? "error" : warningCount > 0 ? "warn" : "pass"
-
-                  return (
-                    <AccordionItem key={key} value={key} className="border rounded-lg bg-card px-4">
-                      <AccordionTrigger className="hover:no-underline py-3 gap-3 [&>svg:last-of-type]:hidden">
-                        <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200" />
-                        <div className="flex flex-1 flex-wrap items-center justify-between gap-3 pr-2">
-                          <div className="flex items-center gap-2 text-left">
-                            <span className="font-medium text-sm">{humanizeSectionKey(key)}</span>
-                          </div>
-                          <div className="flex items-center gap-1.5">
-                            {sectionTotal > 0 && (
-                              <span className="text-xs font-medium text-muted-foreground tabular-nums mr-0.5">
-                                {passedCount}/{sectionTotal} passed
-                              </span>
-                            )}
-                            {sectionStatus === "pass" ? (
-                              <Badge className="bg-green-500 hover:bg-green-600 text-xs px-2 py-0.5">
-                                <Check className="w-2.5 h-2.5 mr-1" /> Ready
-                              </Badge>
-                            ) : (
-                              <Badge className="bg-red-500 hover:bg-red-600 text-xs px-2 py-0.5">
-                                <X className="w-2.5 h-2.5 mr-1" /> Not Ready
-                              </Badge>
-                            )}
-                          </div>
-                        </div>
-                      </AccordionTrigger>
-                      <AccordionContent>
-                        {errorCount === 0 && warningCount === 0 && actionCount === 0 ? (
-                          <div className="flex items-center gap-2 text-sm text-muted-foreground pt-1 pb-2">
-                            <CheckCircle className="h-4 w-4 text-green-700 dark:text-green-400" />
-                            No issues found in this section.
-                          </div>
-                        ) : (
-                          <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-6 gap-y-4 pt-1 pb-2">
-                            {/* Left column: errors + warnings */}
-                            <div className="space-y-4">
-                              {errorCount > 0 && (
-                                <div>
-                                  <Badge className="mb-2 bg-red-600 hover:bg-red-600 text-white text-xs">Errors</Badge>
-                                  <div className="rounded-md border overflow-hidden">
-                                    <Table>
-                                      <TableBody>
-                                        {section.error.map((item, i) => (
-                                          <TableRow key={i}>
-                                            <TableCell className="w-10 text-center align-middle font-bold text-red-700 dark:text-red-400 tabular-nums">
-                                              {i + 1}
-                                            </TableCell>
-                                            <TableCell className="align-middle text-sm">{item}</TableCell>
-                                          </TableRow>
-                                        ))}
-                                      </TableBody>
-                                    </Table>
-                                  </div>
-                                </div>
-                              )}
-
-                              {warningCount > 0 && (
-                                <div>
-                                  <Badge className="mb-2 bg-amber-600 hover:bg-amber-600 text-white text-xs">Warnings</Badge>
-                                  <div className="rounded-md border overflow-hidden">
-                                    <Table>
-                                      <TableBody>
-                                        {section.warning.map((item, i) => (
-                                          <TableRow key={i}>
-                                            <TableCell className="w-10 text-center align-middle font-bold text-amber-700 dark:text-amber-400 tabular-nums">
-                                              {i + 1}
-                                            </TableCell>
-                                            <TableCell className="align-middle text-sm">{item}</TableCell>
-                                          </TableRow>
-                                        ))}
-                                      </TableBody>
-                                    </Table>
-                                  </div>
-                                </div>
-                              )}
-
-                              {errorCount === 0 && warningCount === 0 && (
-                                <div className="text-sm text-muted-foreground">No errors or warnings.</div>
-                              )}
-                            </div>
-
-                            {/* Right column: action items */}
-                            <div className="lg:border-l lg:pl-6">
-                              {actionCount > 0 ? (
-                                <div>
-                                  <Badge className="mb-2 text-xs">Action Items</Badge>
-                                  <div className="rounded-md border overflow-hidden">
-                                    <Table>
-                                      <TableBody>
-                                        {section.action_items.map((item, i) => (
-                                          <TableRow key={i}>
-                                            <TableCell className="w-10 text-center align-middle font-bold text-primary tabular-nums">
-                                              {i + 1}
-                                            </TableCell>
-                                            <TableCell className="align-middle text-sm">{item}</TableCell>
-                                          </TableRow>
-                                        ))}
-                                      </TableBody>
-                                    </Table>
-                                  </div>
-                                </div>
-                              ) : (
-                                <div className="text-sm text-muted-foreground">No action items required.</div>
-                              )}
-                            </div>
-                          </div>
-                        )}
-                      </AccordionContent>
-                    </AccordionItem>
-                  )
-                })}
-              </Accordion>
+              <ValidationOutput
+                key={`${validationResult.change_number}-${validationResult.executed_on}`}
+                sections={validationResult.validation_logs}
+                humanizeSectionKey={humanizeSectionKey}
+                overallScore={validationResult.overall_score}
+                overallStatus={validationResult.validation_status}
+                totalPassed={validationResult.summary.passed}
+                totalChecks={validationResult.summary.total_checks}
+              />
             </div>
 
             <Card className="flex-shrink-0">
