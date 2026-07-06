@@ -239,12 +239,14 @@ export function ValidationOutput({
   return (
     <Card>
       <CardHeader className="flex flex-row flex-wrap items-start justify-between gap-4 space-y-0 pb-4">
-        <div className="space-y-1 min-w-0">
+        <div className="flex-1 min-w-0 basis-64 space-y-1">
           <CardTitle className="text-base">{title}</CardTitle>
           <CardDescription className="text-pretty">{description}</CardDescription>
         </div>
-        <div className="flex flex-col items-end gap-3">
-          {actions && <div className="flex items-center gap-2">{actions}</div>}
+        <div className="flex flex-wrap items-center gap-3">
+          {actions && (
+            <div className="flex items-center gap-2 sm:border-r sm:pr-3">{actions}</div>
+          )}
           <div className="flex items-center gap-3">
             <div className="flex flex-col items-end gap-1">
               <div className="flex items-center gap-2">
