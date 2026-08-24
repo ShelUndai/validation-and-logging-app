@@ -1,0 +1,453 @@
+/**
+ * select.mjs — multi-select checkboxes for a plain .mjs CLI.
+ *
+ * Zero dependencies. No build. No raw mode. Node 20 / 22 / 24.
+ * Works in MobaXterm's local terminal, over SSH, in Windows Terminal, and CI.
+ *
+ *   import { select } from './select.mjs';
+ *
+ *   const picked = await select({
+ *     label: 'Which services do you need access to?',
+ *     items: [
+ *       { value: 'jira',   label: 'Jira',       hint: 'ticketing',      group: 'Core', selected: true },
+ *       { value: 'gitlab', label: 'GitLab',     hint: 'source control', group: 'Core' },
+ *       { value: 'vault',  label: 'Vault',      hint: 'needs approval', group: 'Restricted' },
+ *       { value: 'legacy', label: 'Legacy VPN', hint: 'decommissioned', disabled: true },
+ *     ],
+ *     minSelected: 1,
+ *   });
+ *
+ * ── WHY IT LOOKS LIKE THIS ─────────────────────────────────────────────────
+ * Raw mode (reading individual keypresses) and ANSI (rendering colour and
+ * cursor movement) are independent capabilities. Node on Windows only treats
+ * real Windows consoles as TTYs, so behind MobaXterm's Cygwin pipe you get
+ * isTTY === false and no setRawMode — but the terminal on the other end still
+ * renders escape codes perfectly well.
+ *
+ * So: the list repaints in place, in colour, and holds still. Input arrives a
+ * LINE at a time instead of a KEY at a time. That single trade buys you a UI
+ * that works on every box in the company with no native deps and no winpty.
+ * ──────────────────────────────────────────────────────────────────────────
+ */
+
+import readline from 'node:readline';
+
+/* ══ capabilities ═════════════════════════════════════════════════════════ */
+
+export function detectTerminal() {
+  const term = String(process.env.TERM || '');
+  const dumb = term === 'dumb' || process.env.NO_COLOR !== undefined;
+
+  // ANSI is a property of the RECEIVER, not of Node's TTY detection.
+  const ansi =
+    !dumb &&
+    (process.stdout.isTTY === true ||
+      term.startsWith('xterm') ||
+      term.startsWith('screen') ||
+      term.startsWith('vt') ||
+      Boolean(process.env.MSYSTEM) ||
+      Boolean(process.env.ConEmuANSI) ||
+      Boolean(process.env.WT_SESSION));
+
+  // stdout.columns is undefined behind a pipe; the shell usually still exports
+  // COLUMNS, which is the best remaining source of truth.
+  const columns = process.stdout.columns || Number(process.env.COLUMNS) || 80;
+
+  const locale = String(process.env.LC_ALL || process.env.LC_CTYPE || process.env.LANG || '');
+  const unicode =
+    process.env.FORCE_ASCII === '1'
+      ? false
+      : process.env.FORCE_UNICODE === '1' ||
+        /UTF-?8/i.test(locale) ||
+        process.platform !== 'win32' ||
+        Boolean(process.env.WT_SESSION);
+
+  return { ansi, columns, unicode };
+}
+
+/*
+ * Note what is deliberately NOT here: any pre-emptive "is this interactive"
+ * check based on isTTY. Behind a Cygwin pipe isTTY is false while a human is
+ * sitting right there typing — judging on that flag refuses to prompt the one
+ * user who most needs prompting. Attempt the prompt; treat EOF as the proof
+ * that nobody was there. isTTY is a guess, EOF is a fact.
+ */
+
+/* ══ styling ══════════════════════════════════════════════════════════════ */
+
+const style = (on) => {
+  const w = (a, b) => (s) => (on ? `\x1b[${a}m${s}\x1b[${b}m` : String(s));
+  return {
+    bold: w(1, 22), dim: w(2, 22), red: w(31, 39), green: w(32, 39),
+    yellow: w(33, 39), blue: w(34, 39), cyan: w(36, 39), grey: w(90, 39),
+  };
+};
+
+const GLYPHS = {
+  unicode: { on: '◉', off: '○', no: '⊘', tick: '✔' },
+  ascii: { on: '[x]', off: '[ ]', no: '[-]', tick: 'OK' },
+};
+
+/* ══ errors ═══════════════════════════════════════════════════════════════ */
+
+export class CancelledError extends Error {
+  constructor() { super('Cancelled by user'); this.name = 'CancelledError'; }
+}
+export class NonInteractiveError extends Error {
+  constructor(m) { super(m); this.name = 'NonInteractiveError'; }
+}
+/** Thrown when the list cannot possibly satisfy minSelected — the caller has
+ *  to handle "there was nothing to choose from", not the user. */
+export class EmptyListError extends Error {
+  constructor(m, selectable) { super(m); this.name = 'EmptyListError'; this.selectable = selectable; }
+}
+
+/* ══ helpers for dynamic data ═════════════════════════════════════════════ */
+
+/**
+ * Cut a line to `width` visible columns, ignoring ANSI escapes.
+ *
+ * Matters specifically for dynamic lists: a label that comes from a query can
+ * be longer than the terminal is wide. The terminal then wraps it onto a
+ * second row while we counted one, and every subsequent in-place erase is off
+ * by one — the block creeps down the screen. Hardcoded demo data never
+ * triggers this, which is why it survives to production.
+ */
+function clampAnsi(s, width, ansi) {
+  if (width <= 0) return '';
+  let out = '', vis = 0, i = 0, cut = false;
+  while (i < s.length) {
+    if (s[i] === '\x1b') {
+      const m = /^\x1b\[[0-9;]*m/.exec(s.slice(i));
+      if (m) { out += m[0]; i += m[0].length; continue; }
+    }
+    if (vis >= width - 1) { cut = true; break; }
+    out += s[i]; vis++; i++;
+  }
+  if (!cut) return out;
+  return out + (ansi ? '…\x1b[0m' : '…');
+}
+
+/**
+ * Accept whatever shape a runtime-built list actually arrives in:
+ *
+ *   ['dev', 'staging']                          → strings
+ *   [{ value, label, hint, group, disabled }]   → the documented shape
+ *   [{ id, name, ... }]                         → arbitrary records
+ *
+ * For arbitrary records the ORIGINAL OBJECT is what comes back from select(),
+ * so you can map to ids yourself rather than losing the row. Pass getLabel /
+ * getValue / getHint / getGroup / getDisabled to override any of it.
+ */
+function normalizeItems(raw, o = {}) {
+  const pick = (fn, it, keys) => {
+    if (typeof fn === 'function') return fn(it);
+    for (const k of keys) if (it != null && it[k] !== undefined) return it[k];
+    return undefined;
+  };
+
+  return raw.map((it, idx) => {
+    if (it === null || it === undefined) {
+      return { idx, value: it, label: String(it), disabled: true, hint: 'missing' };
+    }
+    const t = typeof it;
+    if (t === 'string' || t === 'number' || t === 'bigint' || t === 'boolean') {
+      return { idx, value: it, label: String(it) };
+    }
+    const value = typeof o.getValue === 'function'
+      ? o.getValue(it)
+      : Object.prototype.hasOwnProperty.call(it, 'value') ? it.value : it;
+    const label = pick(o.getLabel, it, ['label', 'name', 'title', 'displayName', 'text']);
+    return {
+      idx,
+      value,
+      label: String(label !== undefined ? label : (typeof value === 'object' ? JSON.stringify(value) : value)),
+      hint: pick(o.getHint, it, ['hint', 'description', 'detail']),
+      group: pick(o.getGroup, it, ['group', 'category', 'section']),
+      disabled: Boolean(pick(o.getDisabled, it, ['disabled'])),
+      selected: Boolean(pick(o.getSelected, it, ['selected', 'defaultSelected', 'checked'])),
+    };
+  });
+}
+
+/* ══ the select ═══════════════════════════════════════════════════════════ */
+
+export async function select(options) {
+  const {
+    label = 'Select items',
+    minSelected = 0,
+    maxSelected = Infinity,
+    pageSize = 12,
+    answers,
+    caps = detectTerminal(),
+  } = options;
+
+  const c = style(caps.ansi);
+  const g = caps.unicode ? GLYPHS.unicode : GLYPHS.ascii;
+  const write = (s) => process.stdout.write(s);
+
+  /* ── resolve the list: array | Promise | () => array | () => Promise ──── */
+  let source = options.items;
+  if (typeof source === 'function') source = source();
+  if (source && typeof source.then === 'function') {
+    if (caps.ansi) write(`  ${c.grey('loading…')}\n`);
+    source = await source;
+    if (caps.ansi) write('\x1b[1A\x1b[0J');
+  }
+  if (!Array.isArray(source)) {
+    throw new TypeError(`select({ items }) must resolve to an array, got ${typeof source}`);
+  }
+
+  const items = normalizeItems(source, options);
+
+  /*
+   * Selection is keyed by index into THIS normalized array, which is frozen
+   * for the lifetime of the call. Filtering reorders what is *visible* but
+   * never this array, so the index is a stable identity — and unlike keying
+   * on label or value it cannot collide when a query returns two rows with
+   * the same name. (Keying on VISIBLE ROW index is the bug; this is not that.)
+   */
+  const keyOf = (it, i) => i;
+
+  const selectable = items.filter((it) => !it.disabled).length;
+
+  /* ── scripted path: an explicit answer set beats any prompt ───────────── */
+  const preset = answers ?? process.env.SELECT_ANSWERS;
+  if (preset) {
+    const want = new Set(
+      (Array.isArray(preset) ? preset : String(preset).split(',')).map((s) => String(s).trim()),
+    );
+    return items.filter((it) => want.has(String(it.value)) && !it.disabled).map((it) => it.value);
+  }
+
+  /*
+   * Refuse impossible asks up front rather than trapping the user.
+   * A dynamic list can legitimately come back empty, or come back shorter
+   * than minSelected. Without this the prompt loop rejects every Enter and
+   * the only way out is 'q' — the caller never learns why.
+   */
+  if (selectable < minSelected) {
+    throw new EmptyListError(
+      selectable === 0
+        ? `Nothing to select: "${label}" received an empty list (or every item was disabled).`
+        : `"${label}" needs at least ${minSelected} selection(s) but only ${selectable} item(s) are selectable.`,
+      selectable,
+    );
+  }
+  if (items.length === 0) return [];
+
+  const chosen = new Set();
+  items.forEach((it, i) => {
+    if (it.selected && !it.disabled && chosen.size < maxSelected) chosen.add(keyOf(it, i));
+  });
+
+  let filter = '';
+  let page = 0;
+  let note = null;
+  let printed = 0;
+
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout,
+    terminal: false, // we render ourselves; readline must not also move the cursor
+  });
+
+  /*
+   * Line intake, deliberately NOT rl.question().
+   *
+   * With terminal:false, piped input arrives as a single chunk and readline
+   * emits every 'line' from it back-to-back. rl.question() only listens for
+   * the next one, so every line after the first is dropped on the floor and
+   * the loop then sees EOF. That silently breaks scripted and CI runs while
+   * looking fine interactively — the worst kind of bug to ship.
+   *
+   * So buffer every line as it arrives and hand them out on demand.
+   */
+  const EOF = Symbol('eof');
+  const queue = [];
+  let waiting = null;
+  let ended = false;
+
+  rl.on('line', (line) => {
+    if (waiting) { const w = waiting; waiting = null; w(line); }
+    else queue.push(line);
+  });
+  rl.on('close', () => {
+    ended = true;
+    if (waiting) { const w = waiting; waiting = null; w(EOF); }
+  });
+
+  // terminal:false means readline does not print the prompt for us.
+  const ask = (prompt) => {
+    write(prompt);
+    if (queue.length > 0) return Promise.resolve(queue.shift());
+    if (ended) return Promise.resolve(EOF);
+    return new Promise((resolve) => { waiting = resolve; });
+  };
+
+  /** Erase the block we last printed, so the list repaints in place. */
+  const erase = () => {
+    if (caps.ansi && printed > 0) write(`\x1b[${printed}A\x1b[0J`);
+  };
+
+  const visible = () => {
+    const n = filter.trim().toLowerCase();
+    return items
+      .map((it, i) => ({ it, i }))
+      .filter(({ it }) =>
+        n === '' ||
+        it.label.toLowerCase().includes(n) ||
+        String(it.hint || '').toLowerCase().includes(n));
+  };
+
+  function render() {
+    erase();
+    const vis = visible();
+    const pages = Math.max(1, Math.ceil(vis.length / pageSize));
+    if (page >= pages) page = pages - 1;
+    const slice = vis.slice(page * pageSize, page * pageSize + pageSize);
+    const L = [''];
+
+    L.push(
+      `  ${c.bold(label)}   ${c.grey(`${chosen.size} selected`)}` +
+      (minSelected > 0 ? c.grey(` · min ${minSelected}`) : '') +
+      (Number.isFinite(maxSelected) ? c.grey(` · max ${maxSelected}`) : ''),
+    );
+    if (filter) {
+      L.push(`  ${c.cyan(`filter: ${filter}`)}  ${c.grey(`${vis.length} match${vis.length === 1 ? '' : 'es'}`)}`);
+    }
+    L.push('');
+
+    if (vis.length === 0) {
+      L.push(`  ${c.yellow('no matches')}`);
+    } else {
+      const w = String(items.length).length;
+      let group;
+      for (const { it, i } of slice) {
+        if (it.group !== undefined && it.group !== group) {
+          group = it.group;
+          L.push(`  ${c.blue(c.bold(group))}`);
+        }
+        const on = chosen.has(keyOf(it, i));
+        const box = it.disabled ? c.grey(g.no) : on ? c.green(g.on) : g.off;
+        const name = it.disabled ? c.grey(it.label) : on ? c.bold(it.label) : it.label;
+        L.push(`   ${c.grey(String(i + 1).padStart(w) + '.')} ${box} ${name}` +
+               (it.hint ? c.grey(`  ${it.hint}`) : ''));
+      }
+    }
+
+    L.push('');
+    // Scroll indicator: without it, a user cannot tell a complete list from a
+    // truncated one, and will confirm believing they saw everything.
+    if (pages > 1) L.push(`  ${c.grey(`page ${page + 1}/${pages} — 'm' more, 'p' prev`)}`);
+    if (note) { L.push(`  ${note}`); note = null; }
+    L.push(c.grey(
+      '  numbers toggle (1 3 5-8) · a=all · n=none · i=invert · f TEXT=filter\n' +
+      '  c=clear · ?=help · Enter=confirm · q=cancel'));
+    L.push('');
+
+    // Clamp every row to the terminal width, so a long label from dynamic
+    // data cannot wrap and desynchronise the erase math above.
+    const text = L.join('\n')
+      .split('\n')
+      .map((line) => clampAnsi(line, caps.columns, caps.ansi))
+      .join('\n');
+    write(text + '\n');
+    printed = text.split('\n').length; // the prompt line is counted separately
+  }
+
+  function toggle(i) {
+    const it = items[i];
+    if (!it) return void (note = c.red(`  no item numbered ${i + 1}`));
+    if (it.disabled) return void (note = c.yellow(`  ${it.label} cannot be selected`));
+    const k = keyOf(it, i);
+    if (chosen.has(k)) chosen.delete(k);
+    else if (chosen.size >= maxSelected) note = c.red(`  at most ${maxSelected} may be selected`);
+    else chosen.add(k);
+  }
+
+  const finish = () => {
+    rl.close();
+    erase();
+    const out = items.filter((it, i) => chosen.has(keyOf(it, i))).map((it) => it.value);
+    write(`  ${c.green(g.tick)} ${c.bold(label)} — ` +
+          (out.length ? c.green(`${out.length} selected`) : c.yellow('none selected')) + '\n\n');
+    return out;
+  };
+
+  render();
+
+  for (;;) {
+    const a = await ask('  > ');
+
+    if (a === EOF) {
+      rl.close();
+      write('\n');
+      throw new NonInteractiveError(
+        'select() reached end-of-input with nobody to answer it.\n' +
+        '  For CI or scripted runs pass selections explicitly:\n' +
+        '    SELECT_ANSWERS=jira,gitlab node your-cli.mjs\n' +
+        '  or call select({ answers: [...] }).');
+    }
+
+    // The terminal's own line discipline echoed the input, so the block grew
+    // by one row beyond what we rendered.
+    printed += 1;
+
+    const raw = String(a);
+    const cmd = raw.trim().toLowerCase();
+
+    if (cmd === '') {
+      if (chosen.size < minSelected) { note = c.red(`  select at least ${minSelected}`); render(); continue; }
+      return finish();
+    }
+    if (cmd === 'q' || cmd === 'quit' || cmd === 'cancel') {
+      rl.close(); erase(); write(`  ${c.yellow('cancelled')}\n\n`);
+      throw new CancelledError();
+    }
+    if (cmd === '?' || cmd === 'h' || cmd === 'help') {
+      note = c.grey('  1 3 5-8 toggles those · a/n/i all/none/invert (respects filter)\n' +
+                    '  f TEXT filters · c clears · m/p page · Enter confirms · q cancels');
+      render(); continue;
+    }
+    if (cmd === 'a' || cmd === 'all') {
+      for (const { it, i } of visible()) if (!it.disabled && chosen.size < maxSelected) chosen.add(keyOf(it, i));
+      render(); continue;
+    }
+    if (cmd === 'n' || cmd === 'none') {
+      for (const { it, i } of visible()) chosen.delete(keyOf(it, i));
+      render(); continue;
+    }
+    if (cmd === 'i' || cmd === 'invert') {
+      for (const { it, i } of visible()) {
+        if (it.disabled) continue;
+        const k = keyOf(it, i);
+        if (chosen.has(k)) chosen.delete(k);
+        else if (chosen.size < maxSelected) chosen.add(k);
+      }
+      render(); continue;
+    }
+    if (cmd === 'c' || cmd === 'clear') { filter = ''; page = 0; render(); continue; }
+    if (cmd === 'm' || cmd === 'more') { page += 1; render(); continue; }
+    if (cmd === 'p' || cmd === 'prev') { page = Math.max(0, page - 1); render(); continue; }
+
+    const f = /^f\s+(.+)$/i.exec(raw.trim());
+    if (f) { filter = f[1]; page = 0; render(); continue; }
+
+    // numbers and ranges
+    let matched = false;
+    for (const tok of raw.split(/[\s,]+/).filter(Boolean)) {
+      const r = /^(\d+)\s*-\s*(\d+)$/.exec(tok);
+      if (r) {
+        matched = true;
+        const [lo, hi] = [Number(r[1]), Number(r[2])].sort((x, y) => x - y);
+        for (let n = lo; n <= hi; n++) toggle(n - 1);
+      } else if (/^\d+$/.test(tok)) {
+        matched = true;
+        toggle(Number(tok) - 1);
+      }
+    }
+    if (!matched) note = c.red(`  didn't understand "${raw.trim()}" — press ? for help`);
+    render();
+  }
+}
