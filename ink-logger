@@ -1,0 +1,386 @@
+#multi-select logger for ink
+
+import React, { useCallback, useMemo, useRef, useState } from 'react';
+import { Box, Text, useInput } from 'ink';
+
+/* ────────────────────────────────────────────────────────────────────────────
+ * MultiSelect
+ *
+ * The thing that separates a checkbox list that feels good from one that feels
+ * cheap is almost never the checkbox glyph. It's four things:
+ *
+ *   1. A VIEWPORT that scrolls with hysteresis. Naive lists either render all
+ *      500 items (terminal scrolls, everything tears) or recentre the cursor
+ *      on every keypress (the list slides under you and you lose your place).
+ *      Correct behaviour: the list holds still until the cursor gets within
+ *      `scrollMargin` rows of an edge, then moves by exactly as much as needed.
+ *   2. SELECTION IDENTITY THAT SURVIVES FILTERING. Selection is stored against
+ *      stable item keys, never against visible-row indices. Type a filter,
+ *      check three things, clear the filter — the three stay checked. Lists
+ *      that store `Set<number>` of row indices silently corrupt here, and it
+ *      is the single most common bug in hand-rolled multi-selects.
+ *   3. A CURSOR THAT CANNOT LAND ON A NON-ITEM. Group headers and disabled
+ *      rows are skipped by navigation, in both directions, including wrap.
+ *   4. HONEST AFFORDANCES. Counts, scroll indicators, and a key legend that
+ *      reflects the CURRENT mode (filtering vs not), so nobody has to guess.
+ *
+ * Rendering cost is O(visible rows), not O(items), so a 10,000-item list is
+ * exactly as smooth as a 10-item one.
+ * ──────────────────────────────────────────────────────────────────────────── */
+
+export type MultiSelectItem<T> = {
+  /** Returned to you on submit. */
+  readonly value: T;
+  readonly label: string;
+  /** Dim trailing text — a path, a description, a count. */
+  readonly hint?: string;
+  /** Rendered but not focusable or toggleable. */
+  readonly disabled?: boolean;
+  /** Items sharing a group are rendered under one header, in first-seen order. */
+  readonly group?: string;
+  /** Checked on mount. */
+  readonly defaultSelected?: boolean;
+  /**
+   * Stable identity. Defaults to `label`. Set this explicitly if two items can
+   * share a label — selection correctness depends on it being unique.
+   */
+  readonly key?: string;
+};
+
+export type MultiSelectProps<T> = {
+  readonly items: ReadonlyArray<MultiSelectItem<T>>;
+  readonly onSubmit: (values: T[]) => void;
+  readonly onCancel?: () => void;
+  /** Question shown above the list. */
+  readonly label?: string;
+  /** Max list rows on screen at once. Default 10. */
+  readonly maxRows?: number;
+  /** Type-to-filter. Default true. */
+  readonly filterable?: boolean;
+  /** Block submit until this many are checked. Default 0. */
+  readonly minSelected?: number;
+  /** Refuse to check more than this many. Default Infinity. */
+  readonly maxSelected?: number;
+  readonly isActive?: boolean;
+};
+
+/** A flattened display row: either a group header or a selectable item. */
+type Row<T> =
+  | { type: 'header'; label: string }
+  | { type: 'item'; item: MultiSelectItem<T>; key: string; originalIndex: number };
+
+const keyOf = <T,>(item: MultiSelectItem<T>): string => item.key ?? item.label;
+
+export function MultiSelect<T>({
+  items,
+  onSubmit,
+  onCancel,
+  label,
+  maxRows = 10,
+  filterable = true,
+  minSelected = 0,
+  maxSelected = Number.POSITIVE_INFINITY,
+  isActive = true,
+}: MultiSelectProps<T>) {
+  // ── selection: keyed, never index-based ──────────────────────────────────
+  const [selected, setSelected] = useState<Set<string>>(() => {
+    const s = new Set<string>();
+    for (const it of items) if (it.defaultSelected && !it.disabled) s.add(keyOf(it));
+    return s;
+  });
+
+  const [filter, setFilter] = useState('');
+  const [cursor, setCursor] = useState(0); // index into `rows`
+  const [offset, setOffset] = useState(0); // first visible row
+  const [error, setError] = useState<string | null>(null);
+
+  // ── build visible rows ───────────────────────────────────────────────────
+  const rows = useMemo<Row<T>[]>(() => {
+    const needle = filter.trim().toLowerCase();
+    const matches = (it: MultiSelectItem<T>) =>
+      needle === '' ||
+      it.label.toLowerCase().includes(needle) ||
+      (it.hint?.toLowerCase().includes(needle) ?? false);
+
+    const out: Row<T>[] = [];
+    const seenGroups = new Set<string>();
+
+    // Two passes so group headers appear in first-seen order and only when the
+    // group still has at least one matching item under the active filter.
+    const order: (string | undefined)[] = [];
+    for (const it of items) {
+      if (!order.includes(it.group)) order.push(it.group);
+    }
+
+    for (const group of order) {
+      const groupItems = items
+        .map((it, originalIndex) => ({ it, originalIndex }))
+        .filter(({ it }) => it.group === group && matches(it));
+      if (groupItems.length === 0) continue;
+      if (group !== undefined && !seenGroups.has(group)) {
+        seenGroups.add(group);
+        out.push({ type: 'header', label: group });
+      }
+      for (const { it, originalIndex } of groupItems) {
+        out.push({ type: 'item', item: it, key: keyOf(it), originalIndex });
+      }
+    }
+    return out;
+  }, [items, filter]);
+
+  const focusableAt = useCallback(
+    (i: number) => {
+      const r = rows[i];
+      return r !== undefined && r.type === 'item' && !r.item.disabled;
+    },
+    [rows],
+  );
+
+  /** Nearest focusable row at or after `from`, searching in `dir`, with wrap. */
+  const findFocusable = useCallback(
+    (from: number, dir: 1 | -1): number => {
+      if (rows.length === 0) return 0;
+      for (let n = 0; n < rows.length; n++) {
+        const i = (((from + dir * n) % rows.length) + rows.length) % rows.length;
+        if (focusableAt(i)) return i;
+      }
+      return -1; // nothing focusable at all
+    },
+    [rows, focusableAt],
+  );
+
+  // Keep the cursor legal when the filter changes the row set out from under it.
+  const lastRowsLen = useRef(rows.length);
+  if (lastRowsLen.current !== rows.length || !focusableAt(cursor)) {
+    lastRowsLen.current = rows.length;
+    const next = findFocusable(Math.min(cursor, Math.max(0, rows.length - 1)), 1);
+    if (next !== cursor && next >= 0) {
+      // Safe during render: setState on the same component before commit is a
+      // React-sanctioned "adjusting state on prop change" pattern.
+      setCursor(next);
+      setOffset(0);
+    }
+  }
+
+  const viewportH = Math.max(1, Math.min(maxRows, rows.length));
+
+  /**
+   * Scroll with hysteresis. Only moves when the cursor comes within
+   * `scrollMargin` of an edge, and then only by the minimum amount. This is
+   * what makes long lists feel anchored instead of slippery.
+   */
+  const reveal = useCallback(
+    (target: number) => {
+      const margin = Math.min(2, Math.floor(viewportH / 3));
+      setOffset((off) => {
+        const maxOff = Math.max(0, rows.length - viewportH);
+        let next = off;
+        if (target < off + margin) next = target - margin;
+        else if (target > off + viewportH - 1 - margin) next = target - viewportH + 1 + margin;
+        return Math.max(0, Math.min(maxOff, next));
+      });
+    },
+    [rows.length, viewportH],
+  );
+
+  const move = useCallback(
+    (dir: 1 | -1) => {
+      const next = findFocusable(cursor + dir, dir);
+      if (next < 0) return;
+      setCursor(next);
+      reveal(next);
+      setError(null);
+    },
+    [cursor, findFocusable, reveal],
+  );
+
+  const toggleAt = useCallback(
+    (rowIndex: number) => {
+      const row = rows[rowIndex];
+      if (!row || row.type !== 'item' || row.item.disabled) return;
+      setSelected((prev) => {
+        const next = new Set(prev);
+        if (next.has(row.key)) {
+          next.delete(row.key);
+        } else {
+          if (next.size >= maxSelected) {
+            setError(`You can select at most ${maxSelected}.`);
+            return prev;
+          }
+          next.add(row.key);
+        }
+        setError(null);
+        return next;
+      });
+    },
+    [rows, maxSelected],
+  );
+
+  /** Select-all applies to the CURRENT FILTER only — that's the useful semantic:
+   *  filter to "*.test.ts", hit ctrl+a, get exactly those. */
+  const toggleAllVisible = useCallback(() => {
+    const visibleKeys = rows.filter((r): r is Extract<Row<T>, { type: 'item' }> => r.type === 'item' && !r.item.disabled).map((r) => r.key);
+    setSelected((prev) => {
+      const allOn = visibleKeys.length > 0 && visibleKeys.every((k) => prev.has(k));
+      const next = new Set(prev);
+      if (allOn) {
+        for (const k of visibleKeys) next.delete(k);
+      } else {
+        for (const k of visibleKeys) {
+          if (next.size >= maxSelected) break;
+          next.add(k);
+        }
+      }
+      return next;
+    });
+    setError(null);
+  }, [rows, maxSelected]);
+
+  const submit = useCallback(() => {
+    if (selected.size < minSelected) {
+      setError(`Select at least ${minSelected}.`);
+      return;
+    }
+    const chosen = items.filter((it) => selected.has(keyOf(it))).map((it) => it.value);
+    onSubmit(chosen);
+  }, [selected, minSelected, items, onSubmit]);
+
+  useInput(
+    (input, key) => {
+      if (key.upArrow || (key.ctrl && input === 'p')) return move(-1);
+      if (key.downArrow || (key.ctrl && input === 'n')) return move(1);
+
+      if (key.pageUp) {
+        for (let i = 0; i < viewportH; i++) move(-1);
+        return;
+      }
+      if (key.pageDown) {
+        for (let i = 0; i < viewportH; i++) move(1);
+        return;
+      }
+
+      if (key.return) return submit();
+      if (key.escape) {
+        if (filter !== '') {
+          setFilter('');
+          return;
+        }
+        onCancel?.();
+        return;
+      }
+
+      // Tab = "check this and move on", the fastest way through a long list.
+      if (key.tab) {
+        toggleAt(cursor);
+        move(1);
+        return;
+      }
+
+      if (key.ctrl && input === 'a') return toggleAllVisible();
+
+      if (input === ' ') return toggleAt(cursor);
+
+      if (filterable) {
+        if (key.backspace || key.delete) {
+          setFilter((f) => f.slice(0, -1));
+          return;
+        }
+        if (!key.ctrl && !key.meta && input.length > 0 && !/[\x00-\x1f\x7f]/.test(input)) {
+          setFilter((f) => f + input);
+          setOffset(0);
+          return;
+        }
+      }
+    },
+    { isActive },
+  );
+
+  const visible = rows.slice(offset, offset + viewportH);
+  const above = offset;
+  const below = Math.max(0, rows.length - (offset + viewportH));
+  const itemCount = rows.filter((r) => r.type === 'item').length;
+
+  return (
+    <Box flexDirection="column" paddingX={1}>
+      {label && (
+        <Box>
+          <Text bold>{label}</Text>
+          <Text color="blackBright" dimColor>
+            {`  ${selected.size} selected`}
+            {minSelected > 0 ? ` · min ${minSelected}` : ''}
+            {Number.isFinite(maxSelected) ? ` · max ${maxSelected}` : ''}
+          </Text>
+        </Box>
+      )}
+
+      {filterable && filter !== '' && (
+        <Box>
+          <Text color="cyan">{`filter: ${filter}`}</Text>
+          <Text color="blackBright" dimColor>{`  ${itemCount} match${itemCount === 1 ? '' : 'es'}`}</Text>
+        </Box>
+      )}
+
+      {/* Scroll indicators are load-bearing: without them a user cannot tell
+          a full list from a truncated one, and will submit thinking they saw
+          everything. */}
+      <Text color="blackBright" dimColor>
+        {above > 0 ? `  ↑ ${above} more` : ' '}
+      </Text>
+
+      {rows.length === 0 ? (
+        <Text color="yellow">{'  no matches'}</Text>
+      ) : (
+        visible.map((row, i) => {
+          const rowIndex = offset + i;
+          if (row.type === 'header') {
+            return (
+              <Text key={`h-${row.label}`} color="blue" bold>
+                {`  ${row.label}`}
+              </Text>
+            );
+          }
+          const isCursor = rowIndex === cursor;
+          const isOn = selected.has(row.key);
+          const dim = row.item.disabled;
+          return (
+            <Box key={row.key}>
+              <Text color={isCursor ? 'cyan' : undefined}>{isCursor ? '❯ ' : '  '}</Text>
+              <Text color={dim ? 'blackBright' : isOn ? 'green' : undefined}>
+                {dim ? '⊘ ' : isOn ? '◉ ' : '○ '}
+              </Text>
+              <Text
+                color={dim ? 'blackBright' : isCursor ? 'cyan' : undefined}
+                bold={isCursor && !dim}
+                dimColor={dim}
+              >
+                {row.item.label}
+              </Text>
+              {row.item.hint && (
+                <Text color="blackBright" dimColor>
+                  {`  ${row.item.hint}`}
+                </Text>
+              )}
+            </Box>
+          );
+        })
+      )}
+
+      <Text color="blackBright" dimColor>
+        {below > 0 ? `  ↓ ${below} more` : ' '}
+      </Text>
+
+      {error && <Text color="red">{`  ${error}`}</Text>}
+
+      <Text color="blackBright" dimColor>
+        {legend(filterable, filter)}
+      </Text>
+    </Box>
+  );
+}
+
+function legend(filterable: boolean, filter: string): string {
+  const parts = ['↑↓ move', 'space toggle', 'tab toggle+next', 'ctrl+a all', 'enter confirm'];
+  if (filterable) parts.push(filter === '' ? 'type to filter' : 'esc clear filter');
+  else parts.push('esc cancel');
+  return '  ' + parts.join(' · ');
+}
