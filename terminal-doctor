@@ -1,0 +1,174 @@
+#!/usr/bin/env node
+/**
+ * terminal-doctor.mjs — zero dependencies, no build, no install.
+ *
+ *   node terminal-doctor.mjs
+ *
+ * Run it in every terminal your CLI has to support (MobaXterm local, MobaXterm
+ * SSH, Windows Terminal, cmd.exe, PowerShell, VS Code, whatever CI uses) and
+ * keep the output. It tells you which rendering path each environment can
+ * actually take, instead of guessing.
+ *
+ * Deliberately written for old Node and dumb terminals: no top-level await,
+ * no ANSI required, no ESM-only APIs beyond `import`.
+ */
+
+const out = [];
+const say = (s) => out.push(s);
+const pad = (k) => (k + ' ').padEnd(26, '.');
+
+/* ── environment ────────────────────────────────────────────────────────── */
+
+const nodeMajor = Number(process.versions.node.split('.')[0]);
+
+say('');
+say('  TERMINAL DOCTOR');
+say('  ' + '='.repeat(60));
+say('');
+say('  ENVIRONMENT');
+say(`    ${pad('node')} ${process.version}`);
+say(`    ${pad('platform')} ${process.platform} ${process.arch}`);
+say(`    ${pad('cwd')} ${process.cwd()}`);
+
+const envKeys = [
+  'TERM',
+  'TERM_PROGRAM',
+  'COLORTERM',
+  'MSYSTEM',
+  'CYGWIN',
+  'SHELL',
+  'SSH_TTY',
+  'SSH_CONNECTION',
+  'WT_SESSION',
+  'ConEmuANSI',
+  'CI',
+];
+say('');
+say('  RELEVANT ENV VARS');
+let anyEnv = false;
+for (const k of envKeys) {
+  if (process.env[k] !== undefined && process.env[k] !== '') {
+    anyEnv = true;
+    const v = String(process.env[k]);
+    say(`    ${pad(k)} ${v.length > 44 ? v.slice(0, 41) + '...' : v}`);
+  }
+}
+if (!anyEnv) say('    (none set — that is itself a signal)');
+
+/* ── tty ────────────────────────────────────────────────────────────────── */
+
+say('');
+say('  TTY');
+say(`    ${pad('stdin.isTTY')} ${fmt(process.stdin.isTTY)}`);
+say(`    ${pad('stdout.isTTY')} ${fmt(process.stdout.isTTY)}`);
+say(`    ${pad('stderr.isTTY')} ${fmt(process.stderr.isTTY)}`);
+say(`    ${pad('stdout.columns')} ${process.stdout.columns ?? '(unknown)'}`);
+say(`    ${pad('stdout.rows')} ${process.stdout.rows ?? '(unknown)'}`);
+
+let colorDepth = '(unavailable)';
+try {
+  if (typeof process.stdout.getColorDepth === 'function') {
+    const d = process.stdout.getColorDepth();
+    colorDepth = `${d}-bit (${d >= 24 ? 'truecolor' : d >= 8 ? '256 colors' : d >= 4 ? '16 colors' : 'monochrome'})`;
+  }
+} catch {
+  colorDepth = '(threw)';
+}
+say(`    ${pad('color depth')} ${colorDepth}`);
+
+/* ── raw mode: the decisive test ────────────────────────────────────────── */
+
+say('');
+say('  RAW MODE  (this is the one that decides everything)');
+
+const hasSetRawMode = typeof process.stdin.setRawMode === 'function';
+say(`    ${pad('setRawMode exists')} ${fmt(hasSetRawMode)}`);
+
+let rawWorks = false;
+let rawError = '';
+if (hasSetRawMode) {
+  try {
+    process.stdin.setRawMode(true);
+    process.stdin.setRawMode(false);
+    rawWorks = true;
+  } catch (err) {
+    rawError = err && err.message ? err.message : String(err);
+  }
+}
+say(`    ${pad('setRawMode actually works')} ${hasSetRawMode ? fmt(rawWorks) : 'n/a'}`);
+if (rawError) say(`    ${pad('error')} ${rawError}`);
+
+/* ── unicode ────────────────────────────────────────────────────────────── */
+
+say('');
+say('  GLYPHS  (if any of these render as boxes or ?, use the ASCII theme)');
+say('    box drawing   ╭─┬─╮  │  ╰─┴─╯');
+say('    checkboxes    [x] [ ]   vs   ◉ ○ ⊘');
+say('    arrows        ↑ ↓ ❯ ⎿');
+say('    spinner       ⠋ ⠙ ⠹ ⠸ ⠼');
+
+/* ── verdict ────────────────────────────────────────────────────────────── */
+
+const isWindows = process.platform === 'win32';
+const looksCygwin =
+  Boolean(process.env.MSYSTEM) ||
+  Boolean(process.env.CYGWIN) ||
+  (isWindows && String(process.env.TERM || '').startsWith('xterm'));
+const isCI = Boolean(process.env.CI);
+const interactive = process.stdin.isTTY === true && process.stdout.isTTY === true;
+
+say('');
+say('  ' + '='.repeat(60));
+say('  VERDICT');
+say('');
+
+if (rawWorks && interactive) {
+  say('    ✔  FULL INTERACTIVE — Ink / raw-mode TUI will work here.');
+  if (nodeMajor < 20) {
+    say('');
+    say(`    ⚠  Node ${process.version} is below 20. Ink 7 requires >= 20.`);
+    say('       Either pin an older Ink or require a newer Node.');
+  }
+} else if (isWindows && looksCygwin && !rawWorks) {
+  say('    ✖  NO RAW MODE — Cygwin/MSYS pty talking to a Windows node.exe.');
+  say('');
+  say('       Node on Windows only recognises real Windows consoles as TTYs.');
+  say('       A Cygwin/MSYS pty (which is what MobaXterm\'s local terminal,');
+  say('       Git Bash, and MSYS2 all give you) is a named pipe, so Node');
+  say('       reports isTTY=false and setRawMode is unavailable.');
+  say('');
+  say('       This is NOT fixable from inside your CLI. Options:');
+  say('         1. Ship a line-based fallback UI  ← recommended, always works');
+  say('         2. Tell users to run:  winpty node your-cli.mjs');
+  say('         3. Tell users to launch from Windows Terminal / PowerShell');
+  say('         4. SSH to a Linux host from MobaXterm — real pty, works fine');
+} else if (!interactive) {
+  say('    ✖  NOT A TTY — stdin and/or stdout is a pipe or file.');
+  say('');
+  if (isCI) say('       CI detected. A non-interactive path is required here.');
+  else say('       Either output is being piped, or the terminal is not a console.');
+  say('       Interactive prompts of any kind will hang or be skipped.');
+} else {
+  say('    ⚠  PARTIAL — a TTY, but raw mode is unavailable.');
+  say('       Line-based prompts will work; key-by-key input will not.');
+}
+
+say('');
+say('  WHAT TO BUILD');
+say(`    ${pad('raw-mode TUI (Ink)')} ${rawWorks && interactive ? 'yes' : 'NO'}`);
+say(`    ${pad('line-based prompts')} ${process.stdin.isTTY ? 'yes' : 'only with piped answers'}`);
+say(`    ${pad('ANSI colors')} ${process.stdout.isTTY ? 'yes' : 'no — strip them'}`);
+say(`    ${pad('repaint in place')} ${rawWorks && interactive ? 'yes' : 'NO — print, do not repaint'}`);
+say('');
+say('  ' + '='.repeat(60));
+say('');
+say('  Paste this whole block back when comparing terminals.');
+say('');
+
+process.stdout.write(out.join('\n') + '\n');
+
+function fmt(v) {
+  if (v === true) return 'true';
+  if (v === false) return 'false';
+  return String(v);
+}
